@@ -10,14 +10,36 @@ import sys
 import sqlite3
 import logging
 import argparse
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from cryptography.fernet import Fernet, InvalidToken
 
 try:
-    from flask import request, jsonify
+    from flask import request as _request, jsonify as _jsonify  # pyright: ignore[reportUnknownVariableType, reportMissingModuleSource]
+    request = cast(Any, _request)
+    jsonify = cast(Any, _jsonify)
 except ImportError:
-    request = None
-    jsonify = None
+    def jsonify(*args: Any, **kwargs: Any) -> Any:  # type: ignore
+        """Stub jsonify when Flask is not installed."""
+        raise RuntimeError("Flask is not installed")
+
+    def _stub_get_data(*args: Any, **kwargs: Any) -> str:
+        """Return empty request body for Flask request stub."""
+        return ""
+
+    def _stub_get_json(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Return empty JSON payload for Flask request stub."""
+        return {}
+
+    request = cast(Any, type(
+        "RequestStub",
+        (),
+        {
+            "is_json": False,
+            "args": type("ArgsStub", (), {"get": staticmethod(lambda *a, **k: None)})(),
+            "get_data": staticmethod(_stub_get_data),
+            "get_json": staticmethod(_stub_get_json),
+        },
+    )())
 
 CONFIG_DB = "/var/hifiberry/config.sqlite"
 KEY_FILE = "/etc/configdb.key"
@@ -30,13 +52,13 @@ class ConfigDB:
     def __init__(self, db_path: str = CONFIG_DB) -> None:
         """
         Initialize the database connection
-        
+
         Args:
             db_path: Path to the SQLite database file (default: /var/hifiberry/config.sqlite)
         """
         self.db_path = db_path
         self._ensure_db_exists()
-        
+
     def _ensure_db_exists(self) -> bool:
         """Create the database and table if they don't exist"""
         db_dir = os.path.dirname(self.db_path)
@@ -46,7 +68,7 @@ class ConfigDB:
             except Exception as e:
                 logging.error(f"Couldn't create directory {db_dir}: {str(e)}")
                 return False
-        
+
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -103,7 +125,7 @@ class ConfigDB:
 
         Returns:
             The decrypted value (string).
-            
+
         Raises:
             InvalidToken: If the encrypted value is corrupted or invalid.
         """
@@ -159,7 +181,7 @@ class ConfigDB:
         try:
             # Get current value BEFORE encryption for comparison
             current_value = self.get(key, secure=False)
-            
+
             # Check if value is already set (compare unencrypted values)
             if current_value is not None:
                 decrypted_current = None
@@ -171,7 +193,7 @@ class ConfigDB:
                         decrypted_current = None
                 else:
                     decrypted_current = current_value
-                    
+
                 if decrypted_current == value:
                     logging.debug(f"Value for {key} is already set, skipping update")
                     return True
@@ -182,7 +204,7 @@ class ConfigDB:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT OR REPLACE INTO config (key, value, modified_at) 
+                INSERT OR REPLACE INTO config (key, value, modified_at)
                 VALUES (?, ?, CURRENT_TIMESTAMP)
             ''', (key, encrypted_value))
             conn.commit()
@@ -201,10 +223,10 @@ class ConfigDB:
     def delete(self, key: str) -> bool:
         """
         Delete a key from the database
-        
+
         Args:
             key: The key to delete
-            
+
         Returns:
             True if successful, False otherwise
         """
@@ -218,33 +240,33 @@ class ConfigDB:
         except Exception as e:
             logging.error(f"Error deleting key {key}: {str(e)}")
             return False
-    
+
     def list_keys(self, prefix: Optional[str] = None) -> List[str]:
         """
         List all keys in the database, optionally filtered by prefix
-        
+
         Args:
             prefix: Optional prefix to filter keys
-            
+
         Returns:
             List of keys
         """
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            
+
             if prefix:
                 cursor.execute("SELECT key FROM config WHERE key LIKE ?", (prefix + "%",))
             else:
                 cursor.execute("SELECT key FROM config")
-                
+
             keys = [row[0] for row in cursor.fetchall()]
             conn.close()
             return keys
         except Exception as e:
             logging.error(f"Error listing keys: {str(e)}")
             return []
-    
+
     def clear_all(self) -> bool:
         """
         Delete all keys from the database
@@ -268,22 +290,22 @@ class ConfigDB:
     def get_all(self, prefix: Optional[str] = None) -> Dict[str, Any]:
         """
         Get all key/value pairs, optionally filtered by prefix
-        
+
         Args:
             prefix: Optional prefix to filter keys
-            
+
         Returns:
             Dictionary of key/value pairs
         """
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            
+
             if prefix:
                 cursor.execute("SELECT key, value FROM config WHERE key LIKE ?", (prefix + "%",))
             else:
                 cursor.execute("SELECT key, value FROM config")
-                
+
             result = {row[0]: row[1] for row in cursor.fetchall()}
             conn.close()
             return result
@@ -310,7 +332,7 @@ class ConfigDB:
                 'status': 'error',
                 'message': 'Failed to retrieve configuration keys'
             }), 500
-    
+
     def handle_get_config_value(self, key: str):
         """Flask handler: Get a specific configuration value"""
         if request is None or jsonify is None:
@@ -318,15 +340,15 @@ class ConfigDB:
         try:
             secure = request.args.get('secure', 'false').lower() == 'true'
             default = request.args.get('default')
-            
+
             value = self.get(key, default, secure)
-            
+
             if value is None and default is None:
                 return jsonify({
                     'status': 'error',
                     'message': f'Configuration key "{key}" not found'
                 }), 404
-            
+
             return jsonify({
                 'status': 'success',
                 'data': {
@@ -340,7 +362,7 @@ class ConfigDB:
                 'status': 'error',
                 'message': 'Failed to retrieve configuration value'
             }), 500
-    
+
     def handle_set_config_value(self, key: str):
         """Flask handler: Set a configuration value"""
         if request is None or jsonify is None:
@@ -351,23 +373,44 @@ class ConfigDB:
                     'status': 'error',
                     'message': 'Content-Type must be application/json'
                 }), 400
-            
-            data = request.get_json()
+
+            raw_body = request.get_data(cache=True, as_text=True)
+            if not raw_body or not raw_body.strip():
+                return jsonify({
+                    'status': 'error',
+                    'message': 'JSON body cannot be empty'
+                }), 400
+
+            data = request.get_json(silent=True)
+            if data is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Malformed JSON body'
+                }), 400
+
+            if not isinstance(data, dict):
+                return jsonify({
+                    'status': 'error',
+                    'message': 'JSON body must be an object'
+                }), 400
+
+            data = cast(Dict[str, Any], data)
+
             if 'value' not in data:
                 return jsonify({
                     'status': 'error',
                     'message': 'Missing required field: value'
                 }), 400
-            
+
             value = data['value']
             secure = data.get('secure', False)
-            
+
             # Convert value to string if it's not already
             if not isinstance(value, str):
                 value = str(value)
-            
+
             success = self.set(key, value, secure)
-            
+
             if success:
                 return jsonify({
                     'status': 'success',
@@ -382,21 +425,21 @@ class ConfigDB:
                     'status': 'error',
                     'message': 'Failed to set configuration value'
                 }), 500
-                
+
         except Exception as e:
             logging.error(f"Error setting config value for key {key}: {e}")
             return jsonify({
                 'status': 'error',
                 'message': 'Failed to set configuration value'
             }), 500
-    
+
     def handle_delete_config_value(self, key: str):
         """Flask handler: Delete a configuration value"""
         if request is None or jsonify is None:
             raise RuntimeError("Flask is not available. Install flask to use HTTP handlers.")
         try:
             success = self.delete(key)
-            
+
             if success:
                 return jsonify({
                     'status': 'success',
@@ -407,7 +450,7 @@ class ConfigDB:
                     'status': 'error',
                     'message': 'Failed to delete configuration value'
                 }), 500
-                
+
         except Exception as e:
             logging.error(f"Error deleting config value for key {key}: {e}")
             return jsonify({
@@ -422,7 +465,7 @@ def main():
 
     # Create the parser
     parser = argparse.ArgumentParser(description='Manage HiFiBerry OS configuration database')
-    
+
     # Create arguments for the different commands
     parser.add_argument('--get', metavar='KEY', help='Get a value from the configuration')
     parser.add_argument('--set', nargs=2, metavar=('KEY', 'VALUE'), help='Set a key/value pair')
@@ -432,23 +475,23 @@ def main():
     parser.add_argument('--prefix', help='Filter keys by prefix (for use with --list or --dump)')
     parser.add_argument('--default', help='Default value if key does not exist (for use with --get)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
-    
+
     # Handle positional command syntax as well (for backwards compatibility)
     parser.add_argument('command', nargs='?', help='Legacy command (get, set, delete, list, dump)')
     parser.add_argument('args', nargs='*', help='Legacy command arguments')
-    
+
     # Parse arguments
     args = parser.parse_args()
-    
+
     # Set logging level
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
-    
+
     # Initialize database
     db = ConfigDB()
-    
+
     # Handle commands with preference for new-style (--option) commands
-    
+
     # --get command
     if args.get:
         value = db.get(args.get, args.default)
@@ -457,7 +500,7 @@ def main():
             return 0
         else:
             return 1
-            
+
     # --set command
     elif args.set:
         key, value = args.set
@@ -466,7 +509,7 @@ def main():
             logging.error(f"Failed to set {key}")
             return 1
         return 0
-            
+
     # --delete command
     elif args.delete:
         success = db.delete(args.delete)
@@ -474,21 +517,21 @@ def main():
             logging.error(f"Failed to delete {args.delete}")
             return 1
         return 0
-            
+
     # --list command
     elif args.list:
         keys = db.list_keys(args.prefix)
         for key in keys:
             print(key)
         return 0
-            
+
     # --dump command
     elif args.dump:
         entries = db.get_all(args.prefix)
         for key, value in entries.items():
             print(f"{key}={value}")
         return 0
-    
+
     # Handle legacy (positional) syntax if no new-style commands were given
     elif args.command:
         if args.command == 'get' and args.args:
@@ -500,7 +543,7 @@ def main():
                 return 0
             else:
                 return 1
-                
+
         elif args.command == 'set' and len(args.args) >= 2:
             key = args.args[0]
             value = args.args[1]
@@ -509,7 +552,7 @@ def main():
                 logging.error(f"Failed to set {key}")
                 return 1
             return 0
-                
+
         elif args.command == 'delete' and args.args:
             key = args.args[0]
             success = db.delete(key)
@@ -517,21 +560,21 @@ def main():
                 logging.error(f"Failed to delete {key}")
                 return 1
             return 0
-                
+
         elif args.command == 'list':
             prefix = args.args[0] if args.args else None
             keys = db.list_keys(prefix)
             for key in keys:
                 print(key)
             return 0
-                
+
         elif args.command == 'dump':
             prefix = args.args[0] if args.args else None
             entries = db.get_all(prefix)
             for key, value in entries.items():
                 print(f"{key}={value}")
             return 0
-    
+
     # If no action specified, show help
     parser.print_help()
     return 1

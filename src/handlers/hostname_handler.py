@@ -147,8 +147,8 @@ class HostnameHandler:
             if hostname and not validate_hostname(hostname):
                 invalid_hostname_message = (
                     'Invalid hostname format (max 64 chars, '
-                    'ASCII letters/numbers/hyphens, '
-                    'no leading/trailing hyphens)'
+                    'ASCII letters/numbers/hyphens/dots, '
+                    'no leading/trailing hyphens or dots)'
                 )
                 if jsonify:
                     return jsonify({

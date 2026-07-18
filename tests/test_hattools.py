@@ -12,11 +12,12 @@ Tests cover:
 
 import unittest
 import sys
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 from io import StringIO
 
-# Add src directory to path for imports
-sys.path.insert(0, '/home/ulf/data/configurator')
+# Add repository root to path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.hattools import (
     get_hat_info, main,
@@ -38,9 +39,9 @@ class TestGetHatInfo(unittest.TestCase):
             'uuid': '12345678-1234-5678-1234-567812345678'
         }
         mock_hat_class.return_value = mock_hat
-        
+
         result = get_hat_info(verbose=False)
-        
+
         self.assertEqual(result['vendor'], 'HiFiBerry')
         self.assertEqual(result['product'], 'DAC+ Pro')
         self.assertEqual(result['uuid'], '12345678-1234-5678-1234-567812345678')
@@ -56,9 +57,9 @@ class TestGetHatInfo(unittest.TestCase):
             'uuid': 'Unknown'
         }
         mock_hat_class.return_value = mock_hat
-        
+
         result = get_hat_info(verbose=False)
-        
+
         self.assertIsNone(result['vendor'])
         self.assertIsNone(result['product'])
         self.assertIsNone(result['uuid'])
@@ -74,9 +75,9 @@ class TestGetHatInfo(unittest.TestCase):
             'uuid': '12345678-1234-5678-1234-567812345678'
         }
         mock_hat_class.return_value = mock_hat
-        
+
         result = get_hat_info(verbose=False)
-        
+
         self.assertEqual(result['vendor'], 'HiFiBerry')
         self.assertIsNone(result['product'])
         self.assertEqual(result['uuid'], '12345678-1234-5678-1234-567812345678')
@@ -87,9 +88,9 @@ class TestGetHatInfo(unittest.TestCase):
         mock_hat = MagicMock()
         mock_hat.short_info.return_value = {'success': False}
         mock_hat_class.return_value = mock_hat
-        
+
         result = get_hat_info(verbose=False)
-        
+
         self.assertIsNone(result['vendor'])
         self.assertIsNone(result['product'])
         self.assertIsNone(result['uuid'])
@@ -98,9 +99,9 @@ class TestGetHatInfo(unittest.TestCase):
     def test_get_hat_info_exception(self, mock_hat_class):
         """Test HAT info retrieval when exception is raised"""
         mock_hat_class.side_effect = Exception("EEPROM read error")
-        
+
         result = get_hat_info(verbose=False)
-        
+
         self.assertIsNone(result['vendor'])
         self.assertIsNone(result['product'])
         self.assertIsNone(result['uuid'])
@@ -111,9 +112,9 @@ class TestGetHatInfo(unittest.TestCase):
         mock_hat = MagicMock()
         mock_hat.short_info.side_effect = Exception("I2C communication error")
         mock_hat_class.return_value = mock_hat
-        
+
         result = get_hat_info(verbose=False)
-        
+
         self.assertIsNone(result['vendor'])
         self.assertIsNone(result['product'])
         self.assertIsNone(result['uuid'])
@@ -122,7 +123,7 @@ class TestGetHatInfo(unittest.TestCase):
         """Test get_hat_info when HatEEPROM is None"""
         with patch('src.hattools.HatEEPROM', None):
             result = get_hat_info(verbose=False)
-            
+
             self.assertIsNone(result['vendor'])
             self.assertIsNone(result['product'])
             self.assertIsNone(result['uuid'])
@@ -133,7 +134,7 @@ class TestGetHatInfo(unittest.TestCase):
         mock_hat = MagicMock()
         mock_hat.short_info.return_value = {'success': False}
         mock_hat_class.return_value = mock_hat
-        
+
         with patch('src.hattools.logging.error'):
             result = get_hat_info(verbose=True)
             # Should not raise, just return None values
@@ -143,7 +144,7 @@ class TestGetHatInfo(unittest.TestCase):
     def test_get_hat_info_verbose_exception(self, mock_hat_class):
         """Test get_hat_info verbose mode with exception"""
         mock_hat_class.side_effect = Exception("Test error")
-        
+
         with patch('src.hattools.logging.error') as mock_error:
             get_hat_info(verbose=True)
             # Error should be logged
@@ -159,15 +160,9 @@ class TestGetHatInfo(unittest.TestCase):
             # Missing 'product' and 'uuid'
         }
         mock_hat_class.return_value = mock_hat
-        
-        # Should not crash, but may return None for missing keys
-        try:
-            result = get_hat_info(verbose=False)
-            # If it doesn't crash, that's good
-            self.assertIsNotNone(result)
-        except KeyError:
-            # Or it might raise KeyError, which is also acceptable behavior
-            pass
+
+        result = get_hat_info(verbose=False)
+        self.assertEqual(result, {'vendor': None, 'product': None, 'uuid': None})
 
     @patch('src.hattools.HatEEPROM')
     def test_get_hat_info_empty_response(self, mock_hat_class):
@@ -175,13 +170,9 @@ class TestGetHatInfo(unittest.TestCase):
         mock_hat = MagicMock()
         mock_hat.short_info.return_value = {}
         mock_hat_class.return_value = mock_hat
-        
-        try:
-            result = get_hat_info(verbose=False)
-            self.assertIsNotNone(result)
-        except KeyError:
-            # Empty response should either return None values or raise
-            pass
+
+        result = get_hat_info(verbose=False)
+        self.assertEqual(result, {'vendor': None, 'product': None, 'uuid': None})
 
 
 class TestDefaultConstants(unittest.TestCase):
@@ -215,7 +206,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': 'DAC+ Pro',
             'uuid': '12345678-1234-5678-1234-567812345678'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -230,7 +221,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': None,
             'uuid': None
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -246,7 +237,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': 'DAC+ Pro',
             'uuid': '12345678'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -261,7 +252,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': None,
             'uuid': None
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -278,7 +269,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': 'DAC',
             'uuid': 'abc123'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -293,7 +284,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': 'DAC',
             'uuid': None
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as _fake_out:
             result = main()
             # Should be called with verbose=True
@@ -309,7 +300,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': 'Product',
             'uuid': None
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as _fake_out:
             result = main()
             mock_get_info.assert_called_with(verbose=True)
@@ -324,7 +315,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': 'DAC',
             'uuid': 'xyz'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             mock_get_info.assert_called_with(verbose=True)
@@ -340,7 +331,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': None,
             'uuid': '12345'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             output = fake_out.getvalue().strip()
@@ -356,7 +347,7 @@ class TestMainCommandLine(unittest.TestCase):
             'product': 'DAC+ Pro',
             'uuid': None
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             output = fake_out.getvalue().strip()
@@ -377,7 +368,7 @@ class TestMainReturnValues(unittest.TestCase):
             'product': 'Product',
             'uuid': None
         }
-        
+
         with patch('sys.stdout', new=StringIO()):
             result = main()
             self.assertEqual(result, 0)
@@ -392,7 +383,7 @@ class TestMainReturnValues(unittest.TestCase):
             'product': None,
             'uuid': None
         }
-        
+
         with patch('sys.stdout', new=StringIO()):
             result = main()
             self.assertEqual(result, 0)
@@ -410,7 +401,7 @@ class TestOutputFormatting(unittest.TestCase):
             'product': 'DAC+ Pro',
             'uuid': 'ignored'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             main()
             output = fake_out.getvalue().strip()
@@ -429,7 +420,7 @@ class TestOutputFormatting(unittest.TestCase):
             'product': 'DAC',
             'uuid': '12345678'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             main()
             output = fake_out.getvalue().strip()
@@ -450,7 +441,7 @@ class TestOutputFormatting(unittest.TestCase):
             'product': 'Prod',
             'uuid': 'uuid'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             main()
             # Output includes newline from print(), but strip removes it
@@ -470,7 +461,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
             'product': '',
             'uuid': ''
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             main()
             # Empty strings are falsy but not None, so should be printed
@@ -486,7 +477,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
             'product': 'DAC+ Pro®',
             'uuid': 'uuid-with-dashes'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             output = fake_out.getvalue().strip()
@@ -503,7 +494,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
             'product': '音频卡',
             'uuid': 'uuid-中文'
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             output = fake_out.getvalue().strip()
@@ -516,13 +507,13 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         """Test main with very long values"""
         long_vendor = 'A' * 1000
         long_product = 'B' * 1000
-        
+
         mock_get_info.return_value = {
             'vendor': long_vendor,
             'product': long_product,
             'uuid': 'C' * 1000
         }
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             output = fake_out.getvalue().strip()

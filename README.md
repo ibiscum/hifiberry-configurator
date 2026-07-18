@@ -1,7 +1,7 @@
 # HiFiBerry Configurator
 
-A comprehensive system configuration toolkit for HiFiBerry audio devices, providing both command-line tools and a REST API for managing system settings. This is the backend for HiFiBerryOS 
-that handles all system configuration. While it's possible to use it standalone, it's only goal is to provide the functionalities required for the HiFiBerryOS system configuration. 
+A comprehensive system configuration toolkit for HiFiBerry audio devices, providing both command-line tools and a REST API for managing system settings. This is the backend for HiFiBerryOS
+that handles all system configuration. While it's possible to use it standalone, it's only goal is to provide the functionalities required for the HiFiBerryOS system configuration.
 It's not designed to be a general standalone config tool.
 
 ## Features
@@ -38,6 +38,11 @@ Comprehensive documentation is available in the `docs/` directory:
 
 - **[API Documentation](docs/api-documentation.md)** - Complete REST API reference with examples
 - **[Version Management](docs/version-management.md)** - Version management and release process
+- **[cmdline Command Flow](docs/cmdline-command-flow.md)** - Execution flow for config-cmdline and cmdline.txt updates
+- **[config_parser Flow](docs/config-parser-flow.md)** - How config loading, drop-in merging, caching, and reload work
+- **[configtxt Command Flow](docs/configtxt-command-flow.md)** - Execution flow for config-configtxt and config.txt mutations
+- **[dsptoolkit Flow](docs/dsptoolkit-command-flow.md)** - DSP detection request flow, helper APIs, and CLI output modes
+- **[hattools Command Flow](docs/hattools-command-flow.md)** - HAT EEPROM read flow, output formats, and integration points
 
 ## Testing
 
@@ -51,7 +56,7 @@ Async tests are handled by a local pytest hook in `tests/conftest.py`, so `@pyte
 
 ## Requirements
 
-- Python 3.6+
+- Python 3.10+
 - NetworkManager (for network configuration)
 - Root privileges (for system configuration changes)
 

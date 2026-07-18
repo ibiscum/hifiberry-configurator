@@ -13,20 +13,19 @@ Tests cover:
 """
 
 import unittest
+import argparse
 import tempfile
 import os
 import sys
 import shutil
-from unittest.mock import MagicMock
-
-# Mock soundcard module BEFORE any imports
-sys.modules['soundcard'] = MagicMock()
+from unittest.mock import patch
 
 # Add parent directory to path so we can import src as a package
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Now import ConfigTxt from the src package
 from src.configtxt import ConfigTxt  # noqa: E402
+from src import configtxt as configtxt_module  # noqa: E402
 
 
 class TestConfigTxtInitialization(unittest.TestCase):
@@ -36,7 +35,7 @@ class TestConfigTxtInitialization(unittest.TestCase):
         """Create a temporary config file"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.temp_dir, 'config.txt')
-        
+
         # Create a minimal config file
         with open(self.config_path, 'w') as f:
             f.write("# Test config file\n")
@@ -73,7 +72,7 @@ class TestDetectionToggle(unittest.TestCase):
         """Create a temporary config file"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.temp_dir, 'config.txt')
-        
+
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
 
@@ -129,7 +128,7 @@ class TestSoundCardConfiguration(unittest.TestCase):
         """Create a temporary config file with sound settings"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.temp_dir, 'config.txt')
-        
+
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
             f.write("dtparam=audio=on\n")
@@ -144,7 +143,7 @@ class TestSoundCardConfiguration(unittest.TestCase):
         """Test disabling onboard sound"""
         config = ConfigTxt(self.config_path)
         config.disable_onboard_sound()
-        
+
         # Find the audio param line
         audio_lines = [line for line in config.lines if 'dtparam=audio=' in line]
         self.assertTrue(any('off' in line for line in audio_lines))
@@ -154,7 +153,7 @@ class TestSoundCardConfiguration(unittest.TestCase):
         config = ConfigTxt(self.config_path)
         config.disable_onboard_sound()
         config.enable_onboard_sound()
-        
+
         audio_lines = [line for line in config.lines if 'dtparam=audio=' in line]
         self.assertTrue(any('on' in line for line in audio_lines))
 
@@ -162,7 +161,7 @@ class TestSoundCardConfiguration(unittest.TestCase):
         """Test disabling HDMI sound"""
         config = ConfigTxt(self.config_path)
         config.disable_hdmi_sound()
-        
+
         # Check that noaudio was added
         hdmi_lines = [line for line in config.lines if 'dtoverlay=vc4-kms-v3d' in line]
         self.assertTrue(any('noaudio' in line for line in hdmi_lines))
@@ -172,7 +171,7 @@ class TestSoundCardConfiguration(unittest.TestCase):
         config = ConfigTxt(self.config_path)
         config.disable_hdmi_sound()
         config.enable_hdmi_sound()
-        
+
         # Check that noaudio was removed
         hdmi_lines = [line for line in config.lines if 'dtoverlay=vc4-kms-v3d' in line]
         self.assertFalse(any('noaudio' in line for line in hdmi_lines))
@@ -181,7 +180,7 @@ class TestSoundCardConfiguration(unittest.TestCase):
         """Test disabling HDMI sound when vc4-kms-v3d overlay doesn't exist"""
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
-        
+
         config = ConfigTxt(self.config_path)
         initial_length = len(config.lines)
         config.disable_hdmi_sound()
@@ -196,7 +195,7 @@ class TestEEPROMConfiguration(unittest.TestCase):
         """Create a temporary config file"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.temp_dir, 'config.txt')
-        
+
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
 
@@ -209,7 +208,7 @@ class TestEEPROMConfiguration(unittest.TestCase):
         """Test disabling EEPROM read"""
         config = ConfigTxt(self.config_path)
         config.disable_eeprom()
-        
+
         eeprom_lines = [line for line in config.lines if 'force_eeprom_read=' in line]
         self.assertTrue(any('0' in line for line in eeprom_lines))
 
@@ -218,7 +217,7 @@ class TestEEPROMConfiguration(unittest.TestCase):
         config = ConfigTxt(self.config_path)
         config.disable_eeprom()
         config.enable_eeprom()
-        
+
         eeprom_lines = [line for line in config.lines if 'force_eeprom_read=' in line]
         self.assertTrue(any('1' in line for line in eeprom_lines))
 
@@ -230,7 +229,7 @@ class TestInterfaceConfiguration(unittest.TestCase):
         """Create a temporary config file"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.temp_dir, 'config.txt')
-        
+
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
 
@@ -243,7 +242,7 @@ class TestInterfaceConfiguration(unittest.TestCase):
         """Test enabling I2C interface"""
         config = ConfigTxt(self.config_path)
         config.enable_i2c()
-        
+
         i2c_lines = [line for line in config.lines if 'dtparam=i2c_arm=' in line]
         self.assertTrue(any('on' in line for line in i2c_lines))
 
@@ -252,7 +251,7 @@ class TestInterfaceConfiguration(unittest.TestCase):
         config = ConfigTxt(self.config_path)
         config.enable_i2c()
         config.disable_i2c()
-        
+
         i2c_lines = [line for line in config.lines if 'dtparam=i2c_arm=' in line]
         self.assertTrue(any('off' in line for line in i2c_lines))
 
@@ -260,7 +259,7 @@ class TestInterfaceConfiguration(unittest.TestCase):
         """Test enabling SPI interface"""
         config = ConfigTxt(self.config_path)
         config.enable_spi()
-        
+
         spi_lines = [line for line in config.lines if 'dtparam=spi=' in line]
         self.assertTrue(any('on' in line for line in spi_lines))
 
@@ -269,7 +268,7 @@ class TestInterfaceConfiguration(unittest.TestCase):
         config = ConfigTxt(self.config_path)
         config.enable_spi()
         config.disable_spi()
-        
+
         spi_lines = [line for line in config.lines if 'dtparam=spi=' in line]
         self.assertTrue(any('off' in line for line in spi_lines))
 
@@ -281,7 +280,7 @@ class TestOverlayManagement(unittest.TestCase):
         """Create a temporary config file"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.temp_dir, 'config.txt')
-        
+
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
             f.write("dtoverlay=hifiberry-dac\n")
@@ -297,7 +296,7 @@ class TestOverlayManagement(unittest.TestCase):
         """Test that enable_overlay adds a new overlay line"""
         config = ConfigTxt(self.config_path)
         config.enable_overlay("hifiberry-amp")
-        
+
         overlay_lines = [line for line in config.lines if 'dtoverlay=hifiberry-amp' in line]
         self.assertEqual(len(overlay_lines), 1)
 
@@ -305,10 +304,10 @@ class TestOverlayManagement(unittest.TestCase):
         """Test enable_overlay adds a card name comment"""
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
-        
+
         config = ConfigTxt(self.config_path)
         config.enable_overlay("hifiberry-dac", card_name="HiFiBerry DAC")
-        
+
         card_comment_lines = [line for line in config.lines if 'HiFiBerry card:' in line]
         self.assertTrue(len(card_comment_lines) > 0)
 
@@ -316,10 +315,10 @@ class TestOverlayManagement(unittest.TestCase):
         """Test enable_overlay can disable EEPROM"""
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
-        
+
         config = ConfigTxt(self.config_path)
         config.enable_overlay("hifiberry-dac", disable_eeprom=True)
-        
+
         eeprom_lines = [line for line in config.lines if 'force_eeprom_read=0' in line]
         self.assertTrue(len(eeprom_lines) > 0)
 
@@ -327,15 +326,15 @@ class TestOverlayManagement(unittest.TestCase):
         """Test removing all HiFiBerry overlays"""
         config = ConfigTxt(self.config_path)
         config.remove_hifiberry_overlays()
-        
+
         # Verify HiFiBerry overlay is removed
         overlay_lines = [line for line in config.lines if 'dtoverlay=hifiberry' in line]
         self.assertEqual(len(overlay_lines), 0)
-        
+
         # Verify card comment is removed
         card_comment_lines = [line for line in config.lines if 'HiFiBerry card:' in line]
         self.assertEqual(len(card_comment_lines), 0)
-        
+
         # Verify force_eeprom_read is removed
         eeprom_lines = [line for line in config.lines if 'force_eeprom_read=' in line]
         self.assertEqual(len(eeprom_lines), 0)
@@ -344,10 +343,10 @@ class TestOverlayManagement(unittest.TestCase):
         """Test enabling HAT I2C overlay"""
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
-        
+
         config = ConfigTxt(self.config_path)
         config.enable_hat_i2c()
-        
+
         hat_i2c_lines = [line for line in config.lines if 'i2c-gpio' in line]
         self.assertTrue(len(hat_i2c_lines) > 0)
 
@@ -355,11 +354,11 @@ class TestOverlayManagement(unittest.TestCase):
         """Test that enabling HAT I2C twice doesn't create duplicates"""
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
-        
+
         config = ConfigTxt(self.config_path)
         config.enable_hat_i2c()
         config.enable_hat_i2c()
-        
+
         hat_i2c_lines = [line for line in config.lines if 'i2c-gpio' in line]
         self.assertEqual(len(hat_i2c_lines), 1)
 
@@ -368,7 +367,7 @@ class TestOverlayManagement(unittest.TestCase):
         config = ConfigTxt(self.config_path)
         config.enable_hat_i2c()
         config.disable_hat_i2c()
-        
+
         hat_i2c_lines = [line for line in config.lines if 'i2c-gpio' in line]
         self.assertEqual(len(hat_i2c_lines), 0)
 
@@ -380,7 +379,7 @@ class TestUPDIConfiguration(unittest.TestCase):
         """Create a temporary config file"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.temp_dir, 'config.txt')
-        
+
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
 
@@ -393,7 +392,7 @@ class TestUPDIConfiguration(unittest.TestCase):
         """Test enabling UPDI configuration"""
         config = ConfigTxt(self.config_path)
         config.enable_updi()
-        
+
         # Check for required lines
         lines_text = "".join(config.lines)
         self.assertIn("enable_uart=1", lines_text)
@@ -417,7 +416,7 @@ class TestChangeTracking(unittest.TestCase):
         """Create a temporary config file"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.temp_dir, 'config.txt')
-        
+
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
             f.write("dtparam=audio=on\n")
@@ -445,7 +444,7 @@ class TestChangeTracking(unittest.TestCase):
         config = ConfigTxt(self.config_path)
         config.disable_onboard_sound()
         config.save()
-        
+
         backup_path = self.config_path + ".backup"
         self.assertTrue(os.path.exists(backup_path))
 
@@ -454,11 +453,11 @@ class TestChangeTracking(unittest.TestCase):
         config = ConfigTxt(self.config_path)
         config.disable_onboard_sound()
         config.save()
-        
+
         # Read the file again
         with open(self.config_path, 'r') as f:
             content = f.read()
-        
+
         self.assertIn("dtparam=audio=off", content)
 
     def test_multiple_changes_persisted(self):
@@ -468,11 +467,11 @@ class TestChangeTracking(unittest.TestCase):
         config.enable_i2c()
         config.enable_spi()
         config.save()
-        
+
         # Read the file again
         with open(self.config_path, 'r') as f:
             content = f.read()
-        
+
         self.assertIn("dtparam=audio=off", content)
         self.assertIn("dtparam=i2c_arm=on", content)
         self.assertIn("dtparam=spi=on", content)
@@ -485,7 +484,7 @@ class TestDefaultConfiguration(unittest.TestCase):
         """Create a temporary config file"""
         self.temp_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.temp_dir, 'config.txt')
-        
+
         with open(self.config_path, 'w') as f:
             f.write("# Test config\n")
             f.write("dtparam=audio=on\n")
@@ -500,15 +499,15 @@ class TestDefaultConfiguration(unittest.TestCase):
         """Test that default_config applies all expected settings"""
         config = ConfigTxt(self.config_path)
         config.default_config()
-        
+
         lines_text = "".join(config.lines)
-        
+
         # Should have disabled HiFiBerry overlays
         self.assertNotIn("dtoverlay=hifiberry", lines_text)
-        
+
         # Should have disabled onboard sound
         self.assertIn("dtparam=audio=off", lines_text)
-        
+
         # Should have enabled SPI and I2C
         self.assertIn("dtparam=spi=on", lines_text)
         self.assertIn("dtparam=i2c_arm=on", lines_text)
@@ -531,14 +530,14 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         """Test handling of an empty config file"""
         with open(self.config_path, 'w') as f:
             f.write("")
-        
+
         config = ConfigTxt(self.config_path)
         config.enable_i2c()
         config.save()
-        
+
         with open(self.config_path, 'r') as f:
             content = f.read()
-        
+
         self.assertIn("dtparam=i2c_arm=on", content)
 
     def test_config_with_only_comments(self):
@@ -546,10 +545,10 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         with open(self.config_path, 'w') as f:
             f.write("# Comment 1\n")
             f.write("# Comment 2\n")
-        
+
         config = ConfigTxt(self.config_path)
         config.enable_spi()
-        
+
         spi_lines = [line for line in config.lines if 'dtparam=spi=' in line]
         self.assertTrue(len(spi_lines) > 0)
 
@@ -559,10 +558,10 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
             f.write("  dtparam=audio=on  \n")
             f.write("\n")
             f.write("dtoverlay=vc4-kms-v3d\n")
-        
+
         config = ConfigTxt(self.config_path)
         config.disable_hdmi_sound()
-        
+
         # Should find the HDMI line despite whitespace
         hdmi_lines = [line for line in config.lines if 'dtoverlay=vc4-kms-v3d' in line]
         self.assertTrue(any('noaudio' in line for line in hdmi_lines))
@@ -572,10 +571,10 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         with open(self.config_path, 'w') as f:
             f.write("dtparam=audio=on\n")
             f.write("dtparam=audio=off\n")
-        
+
         config = ConfigTxt(self.config_path)
         config.enable_onboard_sound()
-        
+
         # Should update the first occurrence
         self.assertEqual(config.lines[0].strip(), "dtparam=audio=on")
 
@@ -584,10 +583,10 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         with open(self.config_path, 'w') as f:
             for i in range(1000):
                 f.write(f"# Comment {i}\n")
-        
+
         config = ConfigTxt(self.config_path)
         config.enable_i2c()
-        
+
         self.assertTrue(len(config.lines) > 1000)
 
     def test_unicode_in_comments(self):
@@ -595,15 +594,131 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         with open(self.config_path, 'w') as f:
             f.write("# Configuration for HiFiBerry 🎵\n")
             f.write("dtparam=audio=on\n")
-        
+
         config = ConfigTxt(self.config_path)
         config.disable_onboard_sound()
         config.save()
-        
+
         with open(self.config_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         self.assertIn("🎵", content)
+
+
+class TestConfigTxtCLI(unittest.TestCase):
+    """Test CLI-level behavior for configtxt main()."""
+
+    @patch('src.configtxt.ConfigTxt')
+    @patch('src.configtxt.argparse.ArgumentParser.parse_args')
+    def test_report_change_returns_1_when_changes_made(self, mock_parse_args, mock_config_cls):
+        """--report-change should return 1 when save marks changes_made=True."""
+        mock_parse_args.return_value = argparse.Namespace(
+            overlay=None,
+            autodetect_overlay=False,
+            remove_hifiberry=False,
+            disable_onboard_sound=False,
+            enable_onboard_sound=False,
+            disable_hdmi_sound=False,
+            enable_hdmi_sound=False,
+            disable_eeprom=False,
+            enable_eeprom=False,
+            disable_i2c=True,
+            enable_i2c=False,
+            disable_spi=False,
+            enable_spi=False,
+            default_config=False,
+            report_change=True,
+            enable_updi=False,
+            enable_hat_i2c=False,
+            disable_hat_i2c=False,
+            enable_detection=False,
+            disable_detection=False,
+        )
+
+        mock_config = mock_config_cls.return_value
+        mock_config.changes_made = False
+
+        def save_side_effect() -> None:
+            mock_config.changes_made = True
+
+        mock_config.save.side_effect = save_side_effect
+
+        exit_code = configtxt_module.main()
+
+        self.assertEqual(exit_code, 1)
+        mock_config.disable_i2c.assert_called_once()
+        mock_config.save.assert_called_once()
+
+    @patch('src.configtxt.ConfigTxt')
+    @patch('src.configtxt.argparse.ArgumentParser.parse_args')
+    def test_report_change_returns_0_when_no_changes(self, mock_parse_args, mock_config_cls):
+        """--report-change should return 0 when save keeps changes_made=False."""
+        mock_parse_args.return_value = argparse.Namespace(
+            overlay=None,
+            autodetect_overlay=False,
+            remove_hifiberry=False,
+            disable_onboard_sound=False,
+            enable_onboard_sound=False,
+            disable_hdmi_sound=False,
+            enable_hdmi_sound=False,
+            disable_eeprom=False,
+            enable_eeprom=False,
+            disable_i2c=False,
+            enable_i2c=False,
+            disable_spi=False,
+            enable_spi=False,
+            default_config=False,
+            report_change=True,
+            enable_updi=False,
+            enable_hat_i2c=False,
+            disable_hat_i2c=False,
+            enable_detection=False,
+            disable_detection=False,
+        )
+
+        mock_config = mock_config_cls.return_value
+        mock_config.changes_made = False
+
+        exit_code = configtxt_module.main()
+
+        self.assertEqual(exit_code, 0)
+        mock_config.save.assert_called_once()
+
+    @patch('src.configtxt.ConfigTxt')
+    @patch('src.configtxt.argparse.ArgumentParser.parse_args')
+    def test_autodetect_overlay_flag_calls_method(self, mock_parse_args, mock_config_cls):
+        """--autodetect-overlay should invoke ConfigTxt.autodetect_overlay()."""
+        mock_parse_args.return_value = argparse.Namespace(
+            overlay=None,
+            autodetect_overlay=True,
+            remove_hifiberry=False,
+            disable_onboard_sound=False,
+            enable_onboard_sound=False,
+            disable_hdmi_sound=False,
+            enable_hdmi_sound=False,
+            disable_eeprom=False,
+            enable_eeprom=False,
+            disable_i2c=False,
+            enable_i2c=False,
+            disable_spi=False,
+            enable_spi=False,
+            default_config=False,
+            report_change=False,
+            enable_updi=False,
+            enable_hat_i2c=False,
+            disable_hat_i2c=False,
+            enable_detection=False,
+            disable_detection=False,
+        )
+
+        mock_config = mock_config_cls.return_value
+        mock_config.changes_made = False
+
+        exit_code = configtxt_module.main()
+
+        self.assertEqual(exit_code, 0)
+        mock_config.autodetect_overlay.assert_called_once()
+        mock_config.save.assert_called_once()
 
 
 if __name__ == '__main__':

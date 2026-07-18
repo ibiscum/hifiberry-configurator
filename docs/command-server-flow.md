@@ -54,6 +54,14 @@ flowchart LR
 | BLE provisioning endpoints | src/server.py | src/handlers/ble_handler.py |
 | BLE runtime service | systemd/ble-provisioning.service | src/ble_provisioning.py, setup.py |
 | ALSA/asound command | setup.py (`config-asoundconf`) | src/asoundconf.py |
+| HAT EEPROM info command | setup.py (`config-hattools`) | src/hattools.py, src/systeminfo.py |
+| Hostname backend module | src/handlers/hostname_handler.py | src/hostconfig.py, src/hostname_utils.py |
+| Hostname utilities module | src/handlers/hostname_handler.py, src/systeminfo.py | src/hostname_utils.py, src/hostconfig.py |
+| I2C device scan backend | src/handlers/i2c_handler.py | src/i2c.py |
+| Network configuration command/api | setup.py (`config-network`), src/handlers/network_handler.py | src/network.py, src/cmdline.py |
+| config.txt command | setup.py (`config-configtxt`) | src/configtxt.py |
+| cmdline kernel params command | setup.py (`config-cmdline`) | src/cmdline.py |
+| DSP toolkit utility | src/dsptoolkit.py | src/soundcard_detector.py |
 | config key/settings endpoints | src/server.py | src/configdb.py, src/settings_manager.py |
 
 ## High-Impact Command Flows
@@ -180,6 +188,215 @@ Notes:
 - This flow is currently CLI-only; there is no direct `/api/v1/*` route mapped to src/asoundconf.py in src/server.py.
 - Primary side effect is writing `/etc/asound.conf` when generated content differs from the existing file.
 
+### 7. cmdline kernel parameter CLI flow
+
+Entry point:
+
+- `config-cmdline` -> `configurator.cmdline:main` (setup.py)
+
+Execution path:
+
+1. CLI parses one required mutually exclusive flag:
+  - `--enable-serial-console`
+  - `--disable-serial-console`
+  - `--enable-ipv6`
+  - `--disable-ipv6`
+2. `CmdlineTxt` locates cmdline file in this order:
+  - `/boot/firmware/cmdline.txt`
+  - `/boot/cmdline.txt`
+3. Current single-line kernel args are loaded into memory.
+4. Selected operation mutates token list:
+  - serial console token `console=serial0,115200`
+  - IPv6 token `ipv6.disable=1`
+5. `save()` writes only when content changed:
+  - creates `<cmdline>.backup`
+  - writes updated line with trailing newline
+
+Notes:
+
+- This flow is CLI-only; there is no direct `/api/v1/*` route mapped to src/cmdline.py in src/server.py.
+- Side effects are file edits under `/boot*`; no subprocess/systemctl calls are used.
+
+### 8. config.txt CLI flow
+
+Entry point:
+
+- `config-configtxt` -> `configurator.configtxt:main` (setup.py)
+
+Execution path:
+
+1. CLI parses flags for overlay, autodetection, interface toggles, detection state, and profile shortcuts.
+2. `ConfigTxt` loads `/boot/firmware/config.txt` into memory and computes baseline checksum.
+3. Selected operations mutate in-memory lines:
+  - overlay operations (`--overlay`, `--autodetect-overlay`, `--remove-hifiberry`)
+  - audio/interface toggles (onboard sound, HDMI, EEPROM, I2C, SPI, HAT I2C)
+  - detection toggles (`--enable-detection`, `--disable-detection`)
+  - profile ops (`--default-config`, `--enable-updi`)
+4. `save()` compares checksums and only writes when content changed:
+  - creates `<config.txt>.backup`
+  - writes updated file
+5. With `--report-change`, command returns `1` when changes were made, else `0`.
+
+Notes:
+
+- This flow is CLI-only; there is no direct `/api/v1/*` route mapped to src/configtxt.py in src/server.py.
+- Side effects are file edits under `/boot/firmware`; no subprocess/systemctl/DBus calls are used in this module.
+
+### 9. DSP toolkit flow
+
+Entry point:
+
+- module API in `src/dsptoolkit.py`
+- CLI `main()` in `src/dsptoolkit.py` (no `config-*` console script mapping in setup.py)
+
+Execution path:
+
+1. `DSPToolkit` builds `base_url` from host/port (default `localhost:13141`).
+2. `detect_dsp()` performs `GET /hardware/dsp` with timeout.
+3. Success path requires HTTP 200 + valid JSON payload.
+4. Helper methods map raw payload into:
+  - detected DSP name
+  - boolean detected/not-detected
+  - status string (`detected`, `not_detected`, `error`, `unavailable`)
+
+Integration note:
+
+- `src/soundcard_detector.py` consumes `detect_dsp(timeout=2.0)` during hardware detection flows.
+
+Notes:
+
+- This module has no direct `/api/v1/*` route in `src/server.py`.
+- Side effects are HTTP reads only; no local file writes or subprocess calls.
+
+### 10. HAT EEPROM info flow
+
+Entry point:
+
+- `config-hattools` -> `configurator.hattools:main` (setup.py)
+
+Execution path:
+
+1. CLI parses `--all` and `--verbose` flags.
+2. `get_hat_info(verbose=...)` reads HAT data via `hateeprom.HatEEPROM` when available.
+3. Read results are normalized:
+  - `Unknown` values map to `None`.
+  - failures/unavailable module return all `None` fields.
+4. `main()` maps missing values to defaults:
+  - `no vendor`, `no product`, `unknown`
+5. Output format:
+  - default: `vendor:product`
+  - with `--all`: `vendor:product:uuid`
+
+Integration note:
+
+- `get_hat_info()` is consumed by `src/systeminfo.py`, `src/soundcard.py`, and `src/soundcard_detector.py`.
+
+Notes:
+
+- This module has no direct `/api/v1/*` route in `src/server.py`.
+- Side effects are EEPROM reads only; no subprocess/systemctl/DBus calls.
+
+### 11. Hostname backend flow
+
+Entry points:
+
+- API route `/api/v1/hostname` handled by `HostnameHandler` in `src/handlers/hostname_handler.py`
+- Backend write operation in `src/hostconfig.py` via `set_hostname_with_hosts_update()`
+
+Execution path:
+
+1. `HostnameHandler` validates request body and optional fields (`hostname`, `pretty_hostname`).
+2. If only `pretty_hostname` is provided, `hostname_utils.sanitize_hostname()` derives a system hostname.
+3. `hostname_utils.validate_hostname()` validates hostname format.
+4. Hostname write calls `hostconfig.set_hostname_with_hosts_update(hostname)`.
+5. `set_hostname_with_hosts_update()` runs:
+  - `hostnamectl set-hostname <hostname>`
+  - best-effort `/etc/hosts` reconciliation through `update_hosts_file(old, new)`
+6. Handler optionally sets pretty hostname through `hostname_utils.set_pretty_hostname()`.
+
+Notes:
+
+- This flow uses `/api/v1/hostname` route, but the hostconfig module itself is backend logic, not a direct route handler.
+- Side effects include `hostnamectl` subprocess calls and `/etc/hosts` updates with backup creation.
+
+### 12. Hostname utilities flow
+
+Entry points:
+
+- `src/handlers/hostname_handler.py` for API `/api/v1/hostname` operations
+- `src/systeminfo.py` for hostname reporting in system info payloads
+
+Execution path:
+
+1. `get_hostnames()` runs:
+  - `hostnamectl hostname`
+  - `hostnamectl --pretty`
+2. Empty pretty hostname is normalized to `None`.
+3. `get_hostnames_with_fallback()` maps missing pretty hostname to hostname.
+4. API write path uses utility wrappers:
+  - `sanitize_hostname()` -> hostconfig sanitization logic
+  - `validate_hostname()` -> hostconfig validation logic
+  - `set_pretty_hostname()` -> `hostnamectl set-hostname --pretty`
+
+Notes:
+
+- This module centralizes read/validate/sanitize helpers and delegates system-hostname writes to hostconfig.
+- Side effects are subprocess calls only; no direct `/etc/hosts` file writes in this module.
+
+### 13. I2C device scan flow
+
+Entry point:
+
+- API route `/api/v1/i2c/devices` handled by `I2CHandler` in `src/handlers/i2c_handler.py`
+
+Execution path:
+
+1. Handler reads optional `bus` query parameter and validates range.
+2. Handler calls `i2c.get_i2c_info(bus_number)`.
+3. `get_i2c_info()`:
+  - checks `/dev/i2c-<bus>` exists
+  - checks `smbus2` import availability
+  - runs `scan_i2c_bus(bus_number)` when prerequisites are met
+4. `scan_i2c_bus()` probes addresses `0x03..0x77` via `smbus2.SMBus(...).read_byte`.
+5. Module also reads `/sys/bus/i2c/devices/i2c-<bus>` to report kernel-managed addresses.
+6. Handler returns:
+  - HTTP 200 with `status=success` when module result has no `error`.
+  - HTTP 200 with `status=error` when module returns an `error` field.
+  - HTTP 500 with `status=error` when unexpected exceptions occur in handler flow.
+
+Notes:
+
+- This is an API-backed module path (no dedicated `config-*` console script).
+- Side effects are hardware probe reads and sysfs reads only; no file writes/systemctl/DBus calls in `src/i2c.py`.
+
+### 14. Network configuration flow
+
+Entry points:
+
+- CLI `config-network` -> `configurator.network:main` in `setup.py`
+- API route `/api/v1/network` -> `NetworkHandler.handle_get_network_config()`
+
+Execution path:
+
+1. CLI parses one command from mutually exclusive flags (`--list-interfaces`, `--set-dhcp`, `--set-fixed`, `--enable-ipv6`, `--disable-ipv6`).
+2. Interface listing path uses `list_physical_interfaces()` with filtering heuristics from `is_physical_interface()`.
+3. DHCP/static paths use NetworkManager via `nmcli`:
+  - discover active connection for interface
+  - modify or create profile
+  - reactivate connection
+4. IPv6 paths combine:
+  - cmdline token updates via `CmdlineTxt`
+  - sysctl file writes/removals in `/etc/sysctl.d/`
+  - `sysctl -p` apply
+  - `nmcli` per-connection IPv6 method updates
+  - `systemctl restart NetworkManager`
+5. API read path calls `get_network_config()` and returns hostname, gateway, DNS servers, and physical interface details.
+
+Notes:
+
+- This module supports both read-only API usage and mutating CLI operations.
+- Mutation paths involve subprocess/system config side effects and generally require elevated privileges.
+
 ## Bluetooth API and DBus path
 
 Routes:
@@ -224,3 +441,12 @@ Execution path:
 - docs/asoundconf-command-flow.md
 - docs/avahi-command-flow.md
 - docs/bluetooth-command-server-flow.md
+- docs/config-parser-flow.md
+- docs/cmdline-command-flow.md
+- docs/configtxt-command-flow.md
+- docs/dsptoolkit-command-flow.md
+- docs/hattools-command-flow.md
+- docs/hostconfig-command-flow.md
+- docs/hostname-utils-flow.md
+- docs/i2c-flow.md
+- docs/network-command-flow.md

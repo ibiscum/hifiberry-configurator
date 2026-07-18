@@ -22,7 +22,7 @@ sys.path.insert(0, '/home/ulf/data/configurator')
 
 from src.dsptoolkit import (
     DSPToolkit, detect_dsp, get_detected_dsp_name, is_dsp_detected,
-    DEFAULT_DSP_HOST, DEFAULT_DSP_PORT, DEFAULT_TIMEOUT
+    DEFAULT_DSP_HOST, DEFAULT_DSP_PORT, DEFAULT_TIMEOUT, VALID_DSP_STATUSES
 )
 
 
@@ -155,7 +155,7 @@ class TestDSPDetection(unittest.TestCase):
         mock_get.return_value = mock_response
 
         result = self.toolkit.detect_dsp()
-        self.assertEqual(result, {})
+        self.assertEqual(result, {"status": "error"})
 
 
 class TestGetDetectedDSPName(unittest.TestCase):
@@ -169,7 +169,7 @@ class TestGetDetectedDSPName(unittest.TestCase):
     def test_get_detected_dsp_name_success(self, mock_detect):
         """Test getting DSP name when detected"""
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
-        
+
         name = self.toolkit.get_detected_dsp_name()
         self.assertEqual(name, "ADAU14xx")
 
@@ -177,7 +177,7 @@ class TestGetDetectedDSPName(unittest.TestCase):
     def test_get_detected_dsp_name_not_detected(self, mock_detect):
         """Test getting DSP name when not detected"""
         mock_detect.return_value = {"status": "not_detected"}
-        
+
         name = self.toolkit.get_detected_dsp_name()
         self.assertIsNone(name)
 
@@ -185,7 +185,7 @@ class TestGetDetectedDSPName(unittest.TestCase):
     def test_get_detected_dsp_name_unavailable(self, mock_detect):
         """Test getting DSP name when service is unavailable"""
         mock_detect.return_value = None
-        
+
         name = self.toolkit.get_detected_dsp_name()
         self.assertIsNone(name)
 
@@ -193,7 +193,7 @@ class TestGetDetectedDSPName(unittest.TestCase):
     def test_get_detected_dsp_name_missing_field(self, mock_detect):
         """Test getting DSP name when detected_dsp field is missing"""
         mock_detect.return_value = {"status": "detected"}
-        
+
         name = self.toolkit.get_detected_dsp_name()
         self.assertIsNone(name)
 
@@ -201,7 +201,7 @@ class TestGetDetectedDSPName(unittest.TestCase):
     def test_get_detected_dsp_name_type_safety(self, mock_detect):
         """Test type safety when detected_dsp is not a string"""
         mock_detect.return_value = {"detected_dsp": 123, "status": "detected"}
-        
+
         name = self.toolkit.get_detected_dsp_name()
         self.assertIsNone(name)
 
@@ -209,7 +209,7 @@ class TestGetDetectedDSPName(unittest.TestCase):
     def test_get_detected_dsp_name_none_value(self, mock_detect):
         """Test getting DSP name when detected_dsp is None"""
         mock_detect.return_value = {"detected_dsp": None, "status": "detected"}
-        
+
         name = self.toolkit.get_detected_dsp_name()
         self.assertIsNone(name)
 
@@ -225,7 +225,7 @@ class TestIsDSPDetected(unittest.TestCase):
     def test_is_dsp_detected_true(self, mock_detect):
         """Test is_dsp_detected returns True when DSP is detected"""
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
-        
+
         result = self.toolkit.is_dsp_detected()
         self.assertTrue(result)
 
@@ -233,7 +233,7 @@ class TestIsDSPDetected(unittest.TestCase):
     def test_is_dsp_detected_false_not_detected(self, mock_detect):
         """Test is_dsp_detected returns False when DSP is not detected"""
         mock_detect.return_value = {"status": "not_detected"}
-        
+
         result = self.toolkit.is_dsp_detected()
         self.assertFalse(result)
 
@@ -241,7 +241,7 @@ class TestIsDSPDetected(unittest.TestCase):
     def test_is_dsp_detected_false_unavailable(self, mock_detect):
         """Test is_dsp_detected returns False when service is unavailable"""
         mock_detect.return_value = None
-        
+
         result = self.toolkit.is_dsp_detected()
         self.assertFalse(result)
 
@@ -249,7 +249,7 @@ class TestIsDSPDetected(unittest.TestCase):
     def test_is_dsp_detected_false_wrong_status(self, mock_detect):
         """Test is_dsp_detected returns False for non-detected status"""
         mock_detect.return_value = {"status": "error"}
-        
+
         result = self.toolkit.is_dsp_detected()
         self.assertFalse(result)
 
@@ -265,7 +265,7 @@ class TestGetDSPStatus(unittest.TestCase):
     def test_get_dsp_status_detected(self, mock_detect):
         """Test getting status when DSP is detected"""
         mock_detect.return_value = {"status": "detected"}
-        
+
         status = self.toolkit.get_dsp_status()
         self.assertEqual(status, "detected")
 
@@ -273,7 +273,7 @@ class TestGetDSPStatus(unittest.TestCase):
     def test_get_dsp_status_not_detected(self, mock_detect):
         """Test getting status when DSP is not detected"""
         mock_detect.return_value = {"status": "not_detected"}
-        
+
         status = self.toolkit.get_dsp_status()
         self.assertEqual(status, "not_detected")
 
@@ -281,7 +281,7 @@ class TestGetDSPStatus(unittest.TestCase):
     def test_get_dsp_status_unavailable(self, mock_detect):
         """Test getting status when service is unavailable"""
         mock_detect.return_value = None
-        
+
         status = self.toolkit.get_dsp_status()
         self.assertEqual(status, "unavailable")
 
@@ -289,17 +289,17 @@ class TestGetDSPStatus(unittest.TestCase):
     def test_get_dsp_status_error(self, mock_detect):
         """Test getting status when response is missing status field"""
         mock_detect.return_value = {}
-        
+
         status = self.toolkit.get_dsp_status()
         self.assertEqual(status, "error")
 
     @patch.object(DSPToolkit, 'detect_dsp')
     def test_get_dsp_status_custom_status(self, mock_detect):
-        """Test getting custom status values"""
+        """Test custom status values are normalized to error."""
         mock_detect.return_value = {"status": "custom_status"}
-        
+
         status = self.toolkit.get_dsp_status()
-        self.assertEqual(status, "custom_status")
+        self.assertEqual(status, "error")
 
 
 class TestConvenienceFunctions(unittest.TestCase):
@@ -310,7 +310,7 @@ class TestConvenienceFunctions(unittest.TestCase):
         """Test convenience detect_dsp function"""
         expected = {"detected_dsp": "ADAU14xx", "status": "detected"}
         mock_detect.return_value = expected
-        
+
         result = detect_dsp()
         self.assertEqual(result, expected)
 
@@ -318,7 +318,7 @@ class TestConvenienceFunctions(unittest.TestCase):
     def test_convenience_get_detected_dsp_name(self, mock_detect):
         """Test convenience get_detected_dsp_name function"""
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
-        
+
         name = get_detected_dsp_name()
         self.assertEqual(name, "ADAU14xx")
 
@@ -326,7 +326,7 @@ class TestConvenienceFunctions(unittest.TestCase):
     def test_convenience_is_dsp_detected(self, mock_detect):
         """Test convenience is_dsp_detected function"""
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
-        
+
         result = is_dsp_detected()
         self.assertTrue(result)
 
@@ -335,7 +335,7 @@ class TestConvenienceFunctions(unittest.TestCase):
         """Test convenience functions with custom host/port/timeout"""
         expected = {"detected_dsp": "ADAU14xx", "status": "detected"}
         mock_detect.return_value = expected
-        
+
         result = detect_dsp(host="10.0.0.1", port=8080, timeout=15.0)
         self.assertEqual(result, expected)
 
@@ -349,7 +349,7 @@ class TestMainCommandLine(unittest.TestCase):
         """Test main with --name-only when DSP is detected"""
         from src.dsptoolkit import main
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -361,7 +361,7 @@ class TestMainCommandLine(unittest.TestCase):
         """Test main with --name-only when DSP is not detected"""
         from src.dsptoolkit import main
         mock_detect.return_value = None
-        
+
         result = main()
         self.assertEqual(result, 1)
 
@@ -371,7 +371,7 @@ class TestMainCommandLine(unittest.TestCase):
         """Test main with --status-only when DSP is detected"""
         from src.dsptoolkit import main
         mock_detect.return_value = {"status": "detected"}
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -383,7 +383,7 @@ class TestMainCommandLine(unittest.TestCase):
         """Test main with --status-only when DSP is not detected"""
         from src.dsptoolkit import main
         mock_detect.return_value = {"status": "not_detected"}
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 1)
@@ -396,7 +396,7 @@ class TestMainCommandLine(unittest.TestCase):
         from src.dsptoolkit import main
         expected = {"detected_dsp": "ADAU14xx", "status": "detected"}
         mock_detect.return_value = expected
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -409,7 +409,7 @@ class TestMainCommandLine(unittest.TestCase):
         """Test main with --json when service is unavailable"""
         from src.dsptoolkit import main
         mock_detect.return_value = None
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 1)
@@ -422,7 +422,7 @@ class TestMainCommandLine(unittest.TestCase):
         """Test main with default output when DSP is detected"""
         from src.dsptoolkit import main
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -434,7 +434,7 @@ class TestMainCommandLine(unittest.TestCase):
         """Test main with default output when service is unavailable"""
         from src.dsptoolkit import main
         mock_detect.return_value = None
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 1)
@@ -448,10 +448,10 @@ class TestMainCommandLine(unittest.TestCase):
         mock_instance = MagicMock()
         mock_toolkit_class.return_value = mock_instance
         mock_instance.detect_dsp.return_value = {"status": "detected"}
-        
+
         with patch('sys.stdout', new=StringIO()):
             main()
-        
+
         mock_toolkit_class.assert_called_once_with("10.0.0.1", 8080, 20.0)
 
 
@@ -524,16 +524,17 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         self.assertEqual(DEFAULT_DSP_HOST, "localhost")
         self.assertEqual(DEFAULT_DSP_PORT, 13141)
         self.assertEqual(DEFAULT_TIMEOUT, 5.0)
+        self.assertEqual(VALID_DSP_STATUSES, {"detected", "not_detected", "error", "unavailable"})
 
     @patch.object(DSPToolkit, 'detect_dsp')
     def test_multiple_sequential_detections(self, mock_detect):
         """Test multiple sequential DSP detection calls"""
         mock_detect.return_value = {"status": "detected"}
-        
+
         for _ in range(5):
             result = self.toolkit.detect_dsp()
             self.assertIsNotNone(result)
-        
+
         self.assertEqual(mock_detect.call_count, 5)
 
 

@@ -33,6 +33,15 @@ The HiFiBerry Configuration API provides REST endpoints for managing configurati
 - [asoundconf Command Flow](asoundconf-command-flow.md)
 - [Avahi Command Flow](avahi-command-flow.md)
 - [Bluetooth and BLE Command/Server Flow](bluetooth-command-server-flow.md)
+- [config_parser Flow](config-parser-flow.md)
+- [cmdline Command Flow](cmdline-command-flow.md)
+- [configtxt Command Flow](configtxt-command-flow.md)
+- [dsptoolkit Flow](dsptoolkit-command-flow.md)
+- [hattools Command Flow](hattools-command-flow.md)
+- [hostconfig Flow](hostconfig-command-flow.md)
+- [hostname_utils Flow](hostname-utils-flow.md)
+- [i2c Flow](i2c-flow.md)
+- [network Command/API Flow](network-command-flow.md)
 
 ## Endpoints
 
@@ -183,6 +192,30 @@ Get all configuration keys only (without values).
   "status": "success",
   "data": ["volume", "soundcard"],
   "count": 2
+}
+```
+
+**Response (Error - HTTP 400, Empty Body):**
+```json
+{
+  "status": "error",
+  "message": "JSON body cannot be empty"
+}
+```
+
+**Response (Error - HTTP 400, Malformed JSON):**
+```json
+{
+  "status": "error",
+  "message": "Malformed JSON body"
+}
+```
+
+**Response (Error - HTTP 400, Missing Value):**
+```json
+{
+  "status": "error",
+  "message": "Missing required field: value"
 }
 ```
 

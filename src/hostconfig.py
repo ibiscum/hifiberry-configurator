@@ -268,8 +268,8 @@ def validate_hostname(hostname: str) -> bool:
 
     Validates that a hostname follows RFC 1123 requirements:
     - Maximum 64 characters total
-    - Can contain ASCII letters (a-z, A-Z), numbers (0-9), and hyphens (-)
-    - Cannot start or end with hyphen
+    - Can contain ASCII letters (a-z, A-Z), numbers (0-9), hyphens (-), and dots (.)
+    - Cannot start or end with hyphen or dot
     - Each label (part separated by dots) must be <= 63 characters
     - Each label cannot start or end with hyphen
 
@@ -282,12 +282,12 @@ def validate_hostname(hostname: str) -> bool:
     if not hostname or len(hostname) > 64:
         return False
 
-    # Must be ASCII letters, numbers, and hyphens only
-    if not re.match(r'^[a-zA-Z0-9-]+$', hostname):
+    # Must be ASCII letters, numbers, hyphens, and dots only
+    if not re.match(r'^[a-zA-Z0-9.-]+$', hostname):
         return False
 
-    # Cannot start or end with hyphen
-    if hostname.startswith('-') or hostname.endswith('-'):
+    # Cannot start or end with hyphen or dot
+    if hostname.startswith(('-', '.')) or hostname.endswith(('-', '.')):
         return False
 
     # Each label (part separated by dots) must be <= 63 chars

@@ -85,7 +85,7 @@ class TestBasicKeyValueOperations(unittest.TestCase):
         self.db.set('key1', 'value1')
         self.db.set('key2', 'value2')
         self.db.set('key3', 'value3')
-        
+
         self.assertEqual(self.db.get('key1'), 'value1')
         self.assertEqual(self.db.get('key2'), 'value2')
         self.assertEqual(self.db.get('key3'), 'value3')
@@ -142,11 +142,11 @@ class TestSecureKeyValueOperations(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = os.path.join(self.temp_dir, 'test.db')
         self.key_path = os.path.join(self.temp_dir, 'test.key')
-        
+
         # Patch the KEY_FILE path
         self.key_file_patcher = patch('configdb.KEY_FILE', self.key_path)
         self.key_file_patcher.start()
-        
+
         self.db = ConfigDB(self.db_path)
 
     def tearDown(self):
@@ -166,7 +166,7 @@ class TestSecureKeyValueOperations(unittest.TestCase):
     def test_secure_value_stored_encrypted(self):
         """Test that secure values are actually encrypted in storage"""
         self.db.set('secure_key', 'secret_value', secure=True)
-        
+
         # Get the raw encrypted value from database
         import sqlite3
         conn = sqlite3.connect(self.db_path)
@@ -174,7 +174,7 @@ class TestSecureKeyValueOperations(unittest.TestCase):
         cursor.execute("SELECT value FROM config WHERE key = ?", ('secure_key',))
         stored_value = cursor.fetchone()[0]
         conn.close()
-        
+
         # Encrypted value should not match the original
         self.assertNotEqual(stored_value, 'secret_value')
 
@@ -203,9 +203,9 @@ class TestSecureKeyValueOperations(unittest.TestCase):
         """Test that the encryption key file is created with secure permissions"""
         if os.path.exists(self.key_path):
             os.remove(self.key_path)
-        
+
         self.db.set('key', 'value', secure=True)
-        
+
         # Check that key file exists and has correct permissions
         self.assertTrue(os.path.exists(self.key_path))
         file_mode = os.stat(self.key_path).st_mode & 0o777
@@ -221,7 +221,7 @@ class TestListingAndFiltering(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = os.path.join(self.temp_dir, 'test.db')
         self.db = ConfigDB(self.db_path)
-        
+
         # Set up test data with various prefixes
         self.db.set('user:name', 'John')
         self.db.set('user:email', 'john@example.com')
@@ -291,9 +291,9 @@ class TestClearAllOperation(unittest.TestCase):
         self.db.set('key1', 'value1')
         self.db.set('key2', 'value2')
         self.db.set('key3', 'value3')
-        
+
         self.assertTrue(self.db.clear_all())
-        
+
         # Verify all keys are gone
         keys = self.db.list_keys()
         self.assertEqual(len(keys), 0)
@@ -318,10 +318,10 @@ class TestEncryptionErrorHandling(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = os.path.join(self.temp_dir, 'test.db')
         self.key_path = os.path.join(self.temp_dir, 'test.key')
-        
+
         self.key_file_patcher = patch('configdb.KEY_FILE', self.key_path)
         self.key_file_patcher.start()
-        
+
         self.db = ConfigDB(self.db_path)
 
     def tearDown(self):
@@ -338,7 +338,7 @@ class TestEncryptionErrorHandling(unittest.TestCase):
     def test_set_with_secure_recovers_from_corrupted_value(self):
         """Test that set() handles corrupted encrypted values gracefully"""
         import sqlite3
-        
+
         # Store a corrupted encrypted value directly
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -348,7 +348,7 @@ class TestEncryptionErrorHandling(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        
+
         # Try to set the same key with secure=True - should succeed and replace
         result = self.db.set('corrupted_key', 'new_value', secure=True)
         self.assertTrue(result)
@@ -356,7 +356,7 @@ class TestEncryptionErrorHandling(unittest.TestCase):
     def test_get_secure_with_corrupted_value_returns_encrypted(self):
         """Test that getting a corrupted secure value as non-secure returns the raw value"""
         import sqlite3
-        
+
         # Store a corrupted encrypted value directly
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -366,7 +366,7 @@ class TestEncryptionErrorHandling(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        
+
         # Get without secure flag
         result = self.db.get('corrupted_key', secure=False)
         self.assertEqual(result, 'this_is_not_valid_encryption')
@@ -391,7 +391,7 @@ class TestPersistence(unittest.TestCase):
         db1 = ConfigDB(self.db_path)
         db1.set('key1', 'value1')
         db1.set('key2', 'value2')
-        
+
         # Create second instance and verify values
         db2 = ConfigDB(self.db_path)
         self.assertEqual(db2.get('key1'), 'value1')
@@ -400,11 +400,11 @@ class TestPersistence(unittest.TestCase):
     def test_encrypted_data_persists(self):
         """Test that encrypted data persists across instances"""
         self.key_path = os.path.join(self.temp_dir, 'test.key')
-        
+
         with patch('configdb.KEY_FILE', self.key_path):
             db1 = ConfigDB(self.db_path)
             db1.set('secure_key', 'secret_value', secure=True)
-            
+
             # Create new instance with same key file
             db2 = ConfigDB(self.db_path)
             result = db2.get('secure_key', secure=True)
@@ -419,7 +419,7 @@ class TestFlaskHandlers(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = os.path.join(self.temp_dir, 'test.db')
         self.db = ConfigDB(self.db_path)
-        
+
         # Populate test data
         self.db.set('test_key', 'test_value')
 
@@ -434,10 +434,10 @@ class TestFlaskHandlers(unittest.TestCase):
         with patch('configdb.request', None):
             with patch('configdb.jsonify', None):
                 db = ConfigDB(self.db_path)
-                
+
                 with self.assertRaises(RuntimeError) as context:
                     db.handle_get_config_keys()
-                
+
                 self.assertIn('Flask', str(context.exception))
 
     @patch('configdb.jsonify')
@@ -446,9 +446,9 @@ class TestFlaskHandlers(unittest.TestCase):
         """Test handle_get_config_keys Flask handler"""
         mock_request.args.get.return_value = None
         mock_jsonify.return_value = {'status': 'success'}
-        
+
         result = self.db.handle_get_config_keys()
-        
+
         mock_request.args.get.assert_called_once_with('prefix')
         self.assertIsNotNone(result)
 
@@ -458,9 +458,9 @@ class TestFlaskHandlers(unittest.TestCase):
         """Test handle_get_config_value Flask handler"""
         mock_request.args.get.side_effect = lambda key, default=None: 'false' if key == 'secure' else None
         mock_jsonify.return_value = {'status': 'success'}
-        
+
         result = self.db.handle_get_config_value('test_key')
-        
+
         self.assertIsNotNone(result)
 
     @patch('configdb.jsonify')
@@ -468,21 +468,51 @@ class TestFlaskHandlers(unittest.TestCase):
     def test_handle_set_config_value(self, mock_request, mock_jsonify):
         """Test handle_set_config_value Flask handler"""
         mock_request.is_json = True
+        mock_request.get_data.return_value = '{"value": "new_value", "secure": false}'
         mock_request.get_json.return_value = {'value': 'new_value', 'secure': False}
         mock_jsonify.return_value = {'status': 'success'}
-        
+
         result = self.db.handle_set_config_value('new_key')
-        
+
         self.assertIsNotNone(result)
+
+    @patch('configdb.jsonify')
+    @patch('configdb.request')
+    def test_handle_set_config_value_empty_json_returns_400(self, mock_request, mock_jsonify):
+        """Test set handler returns 400 with specific message for empty JSON body."""
+        mock_request.is_json = True
+        mock_request.get_data.return_value = ''
+        mock_jsonify.side_effect = lambda payload: payload
+
+        result = self.db.handle_set_config_value('new_key')
+
+        self.assertEqual(result[1], 400)
+        self.assertEqual(result[0]['status'], 'error')
+        self.assertEqual(result[0]['message'], 'JSON body cannot be empty')
+
+    @patch('configdb.jsonify')
+    @patch('configdb.request')
+    def test_handle_set_config_value_malformed_json_returns_400(self, mock_request, mock_jsonify):
+        """Test set handler returns 400 with specific message for malformed JSON body."""
+        mock_request.is_json = True
+        mock_request.get_data.return_value = '{invalid json'
+        mock_request.get_json.return_value = None
+        mock_jsonify.side_effect = lambda payload: payload
+
+        result = self.db.handle_set_config_value('new_key')
+
+        self.assertEqual(result[1], 400)
+        self.assertEqual(result[0]['status'], 'error')
+        self.assertEqual(result[0]['message'], 'Malformed JSON body')
 
     @patch('configdb.jsonify')
     @patch('configdb.request')
     def test_handle_delete_config_value(self, mock_request, mock_jsonify):
         """Test handle_delete_config_value Flask handler"""
         mock_jsonify.return_value = {'status': 'success'}
-        
+
         result = self.db.handle_delete_config_value('test_key')
-        
+
         self.assertIsNotNone(result)
 
 
@@ -540,7 +570,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         self.db.set('Key', 'value1')
         self.db.set('key', 'value2')
         self.db.set('KEY', 'value3')
-        
+
         self.assertEqual(self.db.get('Key'), 'value1')
         self.assertEqual(self.db.get('key'), 'value2')
         self.assertEqual(self.db.get('KEY'), 'value3')

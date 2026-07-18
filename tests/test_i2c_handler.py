@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for I2C handler."""
 
+import importlib
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -27,6 +28,7 @@ def mock_jsonify(data):
     return MockResponse(data, 200)
 
 
+_ORIGINAL_FLASK_MODULE = sys.modules.get("flask")
 flask_mock = MagicMock()
 flask_mock.jsonify = mock_jsonify
 flask_mock.request = MagicMock()
@@ -34,6 +36,15 @@ flask_mock.Response = MockResponse
 sys.modules["flask"] = flask_mock
 
 from src.handlers.i2c_handler import I2CHandler  # noqa: E402  # pylint: disable=wrong-import-position
+importlib.reload(sys.modules["src.handlers.i2c_handler"])
+
+
+def tearDownModule():
+    """Restore original Flask module state after this test module."""
+    if _ORIGINAL_FLASK_MODULE is None:
+        sys.modules.pop("flask", None)
+    else:
+        sys.modules["flask"] = _ORIGINAL_FLASK_MODULE
 
 
 class TestI2CHandler(unittest.TestCase):

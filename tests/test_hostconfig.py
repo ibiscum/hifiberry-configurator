@@ -12,11 +12,12 @@ Tests cover:
 
 import unittest
 import sys
+from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 from io import StringIO
 
-# Add src directory to path for imports
-sys.path.insert(0, '/home/ulf/data/configurator')
+# Add repository root to path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.hostconfig import (
     read_hosts_file, write_hosts_file, update_hosts_file,
@@ -68,8 +69,11 @@ class TestValidateHostname(unittest.TestCase):
         """Test hostname with special characters is invalid"""
         self.assertFalse(validate_hostname('host@name'))
         self.assertFalse(validate_hostname('host_name'))
-        self.assertFalse(validate_hostname('host.name'))
         self.assertFalse(validate_hostname('host name'))
+
+    def test_valid_dotted_hostname(self):
+        """Test hostname with dots is valid"""
+        self.assertTrue(validate_hostname('host.example.com'))
 
     def test_invalid_hostname_uppercase_letters(self):
         """Test that uppercase letters are allowed"""
@@ -238,7 +242,7 @@ class TestUpdateHostsFile(unittest.TestCase):
             '::1\t\tlocalhost ip6-localhost\n'
         ]
         mock_write.return_value = True
-        
+
         result = update_hosts_file(None, 'newhost')
         self.assertTrue(result)
         mock_write.assert_called_once()
@@ -252,7 +256,7 @@ class TestUpdateHostsFile(unittest.TestCase):
             '::1\t\tlocalhost\n'
         ]
         mock_write.return_value = True
-        
+
         result = update_hosts_file('oldhost', 'newhost')
         self.assertTrue(result)
         mock_write.assert_called_once()
@@ -263,7 +267,7 @@ class TestUpdateHostsFile(unittest.TestCase):
         """Test updating empty hosts file creates new structure"""
         mock_read.return_value = []
         mock_write.return_value = True
-        
+
         result = update_hosts_file(None, 'newhost')
         self.assertTrue(result)
         # Should have written with default structure
@@ -275,7 +279,7 @@ class TestUpdateHostsFile(unittest.TestCase):
         """Test update fails when write fails"""
         mock_read.return_value = ['127.0.0.1\tlocalhost\n']
         mock_write.return_value = False
-        
+
         result = update_hosts_file(None, 'newhost')
         self.assertFalse(result)
 
@@ -288,7 +292,7 @@ class TestUpdateHostsFile(unittest.TestCase):
             '127.0.0.1\tlocalhost\n'
         ]
         mock_write.return_value = True
-        
+
         result = update_hosts_file(None, 'newhost')
         self.assertTrue(result)
         # Check that the written content preserves comments
@@ -306,7 +310,7 @@ class TestGetCurrentHostname(unittest.TestCase):
         mock_result.returncode = 0
         mock_result.stdout = 'myhostname\n'
         mock_run.return_value = mock_result
-        
+
         result = get_current_hostname()
         self.assertEqual(result, 'myhostname')
 
@@ -317,7 +321,7 @@ class TestGetCurrentHostname(unittest.TestCase):
         mock_result.returncode = 1
         mock_result.stderr = 'Command failed'
         mock_run.return_value = mock_result
-        
+
         result = get_current_hostname()
         self.assertIsNone(result)
 
@@ -347,7 +351,7 @@ class TestSetHostnameWithHostsUpdate(unittest.TestCase):
         mock_result.returncode = 0
         mock_run.return_value = mock_result
         mock_update.return_value = True
-        
+
         result = set_hostname_with_hosts_update('newhost')
         self.assertTrue(result)
 
@@ -360,7 +364,7 @@ class TestSetHostnameWithHostsUpdate(unittest.TestCase):
         mock_result.returncode = 1
         mock_result.stderr = 'Command failed'
         mock_run.return_value = mock_result
-        
+
         result = set_hostname_with_hosts_update('newhost')
         self.assertFalse(result)
 
@@ -374,7 +378,7 @@ class TestSetHostnameWithHostsUpdate(unittest.TestCase):
         mock_result.returncode = 0
         mock_run.return_value = mock_result
         mock_update.return_value = False  # Hosts file update fails
-        
+
         result = set_hostname_with_hosts_update('newhost')
         # Should still return True because hostname was set
         self.assertTrue(result)
@@ -394,7 +398,7 @@ class TestMainCommandLine(unittest.TestCase):
     def test_main_get_command(self, mock_get):
         """Test main with 'get' command"""
         mock_get.return_value = 'myhostname'
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -405,7 +409,7 @@ class TestMainCommandLine(unittest.TestCase):
     def test_main_get_command_failure(self, mock_get):
         """Test main with 'get' command when it fails"""
         mock_get.return_value = None
-        
+
         with patch('sys.stderr', new=StringIO()):
             result = main()
             self.assertEqual(result, 1)
@@ -449,7 +453,7 @@ class TestMainCommandLine(unittest.TestCase):
     def test_main_set_command_valid(self, mock_set):
         """Test main with 'set' command for valid hostname"""
         mock_set.return_value = True
-        
+
         with patch('sys.stdout', new=StringIO()) as fake_out:
             result = main()
             self.assertEqual(result, 0)
@@ -468,7 +472,7 @@ class TestMainCommandLine(unittest.TestCase):
     def test_main_set_command_failure(self, mock_set):
         """Test main with 'set' command when it fails"""
         mock_set.return_value = False
-        
+
         with patch('sys.stderr', new=StringIO()):
             result = main()
             self.assertEqual(result, 1)
@@ -486,8 +490,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
 
     def test_validate_hostname_with_dots(self):
         """Test hostname with dots (subdomain format)"""
-        # Note: dots are not allowed in basic validation
-        self.assertFalse(validate_hostname('host.example.com'))
+        self.assertTrue(validate_hostname('host.example.com'))
 
     def test_sanitize_hostname_all_special_characters(self):
         """Test sanitizing string with only special characters"""
@@ -516,7 +519,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
             'host_name',
             'short-name'
         ]
-        
+
         for test_input in test_inputs:
             sanitized = sanitize_hostname(test_input)
             self.assertTrue(

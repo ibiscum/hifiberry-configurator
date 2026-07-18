@@ -29,9 +29,9 @@ def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
     """
     Return a dictionary with keys 'vendor', 'product', and 'uuid'.
     If a value is not found, its value is set to None.
-    
+
     This function now uses the hateeprom module from the eeprom package.
-    
+
     Args:
         verbose: If True, log warning and error messages
     """
@@ -39,14 +39,14 @@ def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
         if verbose:
             logging.warning("hateeprom module not available, returning default values")
         return {"vendor": None, "product": None, "uuid": None}
-    
+
     try:
         # Initialize HAT EEPROM interface
         hat = HatEEPROM()  # type: ignore
-        
+
         # Get HAT information using the short_info method
         info = hat.short_info(debug=False)  # type: ignore
-        
+
         if info['success']:
             return {
                 "vendor": info['vendor'] if info['vendor'] != 'Unknown' else None,
@@ -56,7 +56,7 @@ def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
         else:
             # Return None values if reading failed
             return {"vendor": None, "product": None, "uuid": None}
-            
+
     except Exception as e:
         if verbose:
             logging.error(f"Error reading HAT information: {e}")
@@ -64,24 +64,24 @@ def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
 
 def main() -> int:
     """Retrieve and display HAT information via command-line interface.
-    
+
     Reads HAT EEPROM data and outputs vendor, product, and UUID information.
     Supports different output formats and verbose logging.
-    
+
     Returns:
-        Exit code (0 for success, 1 for failure)
+        Exit code (always 0)
     """
     # Configure logging to send messages to stderr
     # Set to ERROR level to only show critical errors, not warnings
     logging.basicConfig(level=logging.ERROR, stream=sys.stderr)
-    
+
     parser = argparse.ArgumentParser(description="Retrieve HAT information")
     parser.add_argument("-a", "--all", action="store_true",
                         help="Display vendor, product, and UUID")
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Enable verbose error messages")
     args = parser.parse_args()
-    
+
     # Adjust logging level based on verbose flag
     if args.verbose:
         logging.getLogger().setLevel(logging.WARNING)
@@ -97,7 +97,7 @@ def main() -> int:
         print(f"{vendor}:{product}:{uuid}")
     else:
         print(f"{vendor}:{product}")
-    
+
     return 0
 
 if __name__ == "__main__":
