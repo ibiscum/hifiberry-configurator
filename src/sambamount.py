@@ -867,7 +867,7 @@ def main():
                 mountpoint = mount['mountpoint']
                 user = mount['user'] if 'user' in mount and mount['user'] else ''
                 version = mount['version'] if 'version' in mount and mount['version'] else 'Auto'
-                password = '***' if 'password' in mount and mount['password'] else ''
+                has_password = bool('password' in mount and mount['password'])
                 mounted = mount.get('mounted', False)
                 
                 # Mount status indicator
@@ -876,7 +876,7 @@ def main():
 
                 # Format: [ID] [STATUS] //user@server/share -> mountpoint (SMB Version)
                 user_prefix = f"{user}@" if user else ""
-                password_suffix = f" (Password: {password})" if password else ""
+                password_suffix = " (Password: set)" if has_password else ""
                 print(f"[{mount_id}] [{status_icon} {status_text}] //{user_prefix}{server}/{share} -> {mountpoint} ({version}){password_suffix}")
         else:
             logger.warning("No mount configurations found in configdb")
