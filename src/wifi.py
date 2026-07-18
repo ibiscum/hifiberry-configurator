@@ -568,8 +568,12 @@ def connect_to_wifi(ssid: str, passphrase: Optional[str] = None,
                 logger.info(f"Connecting to {ssid} (open network)")
                 cmd = ['nmcli', 'device', 'wifi', 'connect', ssid, 'ifname', interface]
             
-            # Run connection command
-            logging.debug(f"Running command: {' '.join(cmd)}")
+            # Run connection command without logging the WiFi passphrase
+            if passphrase:
+                redacted_cmd = ['nmcli', 'device', 'wifi', 'connect', ssid, 'password', '********', 'ifname', interface]
+                logging.debug(f"Running command: {' '.join(redacted_cmd)}")
+            else:
+                logging.debug(f"Running command: {' '.join(cmd)}")
             # Use subprocess.run to execute the command
             connect_result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             
