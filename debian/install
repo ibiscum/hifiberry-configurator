@@ -1,0 +1,29 @@
+systemd/volume-store.service usr/lib/systemd/system/
+systemd/volume-store.timer usr/lib/systemd/system/
+systemd/sambamount.service usr/lib/systemd/system/
+systemd/volume-restore.service usr/lib/systemd/system/
+systemd/config-server.service usr/lib/systemd/system/
+systemd/create-uuid.service usr/lib/systemd/system/
+systemd/config-detect.service usr/lib/systemd/system/
+systemd/ble-provisioning.service usr/lib/systemd/system/
+
+man/config-asoundconf.1 usr/share/man/man1/
+man/config-avahi.1 usr/share/man/man1/
+man/config-cmdline.1 usr/share/man/man1/
+man/config-configtxt.1 usr/share/man/man1/
+man/config-db.1 usr/share/man/man1/
+man/config-detect.1 usr/share/man/man1/
+man/config-detectpi.1 usr/share/man/man1/
+man/config-hattools.1 usr/share/man/man1/
+man/config-network.1 usr/share/man/man1/
+man/config-sambaclient.1 usr/share/man/man1/
+man/config-sambamount.1 usr/share/man/man1/
+man/config-soundcard.1 usr/share/man/man1/
+man/config-volume.1 usr/share/man/man1/
+man/config-wifi.1 usr/share/man/man1/
+man/config-server.1 usr/share/man/man1/
+man/config-pipewire.1 usr/share/man/man1/
+
+man/hifiberry-configurator.7 usr/share/man/man7/
+
+avahi-services/hifiberry.service etc/avahi/services/

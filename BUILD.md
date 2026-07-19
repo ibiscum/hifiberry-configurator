@@ -52,12 +52,12 @@ dh_virtualenv is a tool that packages a Python application with all its dependen
 
 ```
 hifiberry-configurator/
-├── setup.py                           # Python package metadata
-├── requirements.txt                   # Python dependencies
+├── setup.py                          # Python package metadata
+├── requirements.txt                  # Python dependencies
 ├── build-deb.sh                      # Build script (uses sbuild)
 ├── setup-build-env.sh                # Environment setup (executable)
 ├── DEBIAN_BUILD.md                   # Detailed build documentation
-├── DEBIAN_TRIXIE_CONFIG.md          # Configuration reference
+├── DEBIAN_TRIXIE_CONFIG.md           # Configuration reference
 │
 └── debian/                           # Debian packaging
     ├── rules                         # Build rules (dh_virtualenv config)
@@ -361,7 +361,7 @@ rm -rf ~/.cache/pip
 
 ### Systemd Services Not Starting
 
-**Check**: 
+**Check**:
 ```bash
 systemctl status config-server.service
 journalctl -u config-server.service -n 20

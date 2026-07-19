@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "configurator"
+version = "2.13.19"
+description = "HiFiBerry System Configuration"
+readme = { text = "HiFiBerry system configuration scripts including audio control, network management, and PipeWire integration with proxy architecture for root/user session isolation.", content-type = "text/plain" }
+authors = [
+    { name = "HiFiBerry", email = "support@hifiberry.com" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+# Falls Ihr Skript zwingend Python-Abhängigkeiten benötigt, tragen Sie diese hier ein.
+# Wenn der Debian-Build die Paketabhängigkeiten exklusiv über debian/control regelt,
+# kann dieses Array auch komplett leer gelassen werden [], um Build-Fehler zu vermeiden.
+dependencies = []
+
+[project.scripts]
+config-asoundconf = "configurator.asoundconf:main"
+config-configtxt = "configurator.configtxt:main"
+config-hattools = "configurator.hattools:main"
+config-detect = "configurator.soundcard_detector:main"
+config-detectpi = "configurator.pimodel:main"
+config-soundcard = "configurator.soundcard:main"
+config-cmdline = "configurator.cmdline:main"
+config-sambaclient = "configurator.sambaclient:main"
+config-sambamount = "configurator.sambamount:main"
+config-wifi = "configurator.wifi:main"
+config-network = "configurator.network:main"
+config-db = "configurator.configdb:main"
+config-volume = "configurator.volume:main"
+config-avahi = "configurator.avahi:main"
+config-server = "configurator.server:main"
+config-pipewire = "configurator.pipewire:main"
+config-ble-provision = "configurator.ble_provisioning:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

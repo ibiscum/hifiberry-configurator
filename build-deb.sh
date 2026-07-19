@@ -18,8 +18,6 @@ fi
 
 sbuild \
     --chroot-mode=unshare \
-    --no-clean-source \
     --enable-network \
-    $DIST_ARG \
+    "$DIST_ARG" \
     --verbose
-
