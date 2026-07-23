@@ -86,7 +86,8 @@ class TestHostnameHandlerGetHostname(unittest.TestCase):
 
         self.assertEqual(status_code, 500)
         self.assertEqual(data["status"], "error")
-        self.assertEqual(data["error"], "lookup failed")
+        self.assertEqual(data["error"], "get_hostname_failed")
+        self.assertEqual(data["data"]["system_error"], "lookup failed")
 
     @patch("configurator.handlers.hostname_handler.get_hostnames_with_fallback")
     def test_get_hostname_fallback_without_flask(self, mock_get_hostnames):
@@ -316,7 +317,8 @@ class TestHostnameHandlerSetHostnameBehavior(unittest.TestCase):
 
         self.assertEqual(status_code, 500)
         # self.assertEqual(data["status"], "error")
-        self.assertEqual(data["error"], "request parse failed")
+        self.assertEqual(data["error"], "set_hostname_failed")
+        self.assertEqual(data["data"]["system_error"], "request parse failed")
 
     @patch("configurator.handlers.hostname_handler.request", None)
     @patch("configurator.handlers.hostname_handler.jsonify", None)

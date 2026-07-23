@@ -5,6 +5,7 @@ import logging
 from typing import Any, TYPE_CHECKING, Union
 
 from configurator.i2c import get_i2c_info
+from .response_utils import error_response
 
 if TYPE_CHECKING:
     from flask import Response
@@ -57,10 +58,12 @@ class I2CHandler:  # pylint: disable=too-few-public-methods
 
             # Validate bus number
             if bus_number < 0 or bus_number > 10:
-                return jsonify({  # type: ignore[return-value]
-                    'status': 'error',
-                    'message': 'Invalid bus number. Must be between 0 and 10.'
-                }), 400
+                return error_response(
+                    jsonify,
+                    'Invalid bus number. Must be between 0 and 10.',
+                    'invalid_bus_number',
+                    400,
+                )
 
             i2c_info = get_i2c_info(bus_number)
             return jsonify({  # type: ignore[return-value]
@@ -69,8 +72,10 @@ class I2CHandler:  # pylint: disable=too-few-public-methods
             })
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error scanning I2C devices: %s", e)
-            return jsonify({  # type: ignore[return-value]
-                'status': 'error',
-                'message': 'Failed to scan I2C devices',
-                'error': str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                'Failed to scan I2C devices',
+                'i2c_scan_failed',
+                500,
+                system_error=str(e),
+            )

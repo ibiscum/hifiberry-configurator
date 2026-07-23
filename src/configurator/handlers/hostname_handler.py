@@ -20,6 +20,7 @@ from configurator.hostname_utils import (
     set_pretty_hostname
 )
 from ..hostconfig import set_hostname_with_hosts_update
+from .response_utils import build_error_payload
 
 logger = logging.getLogger(__name__)
 
@@ -70,14 +71,18 @@ class HostnameHandler:
             logger.debug(traceback.format_exc())
             if jsonify:
                 return jsonify({
-                    'status': 'error',
-                    'message': 'Failed to get hostname',
-                    'error': str(e)
+                        **build_error_payload(
+                            'Failed to get hostname',
+                            'get_hostname_failed',
+                            system_error=str(e),
+                        )
                 }), 500
             return {
-                'status': 'error',
-                'message': 'Failed to get hostname',
-                'error': str(e)
+                    **build_error_payload(
+                        'Failed to get hostname',
+                        'get_hostname_failed',
+                        system_error=str(e),
+                    )
             }
 
     def handle_set_hostname(self) -> Union[tuple[Any, int], Any]:
@@ -213,12 +218,16 @@ class HostnameHandler:
             logger.debug(traceback.format_exc())
             if jsonify:
                 return jsonify({
-                    'status': 'error',
-                    'message': 'Failed to set hostname',
-                    'error': str(e)
+                        **build_error_payload(
+                            'Failed to set hostname',
+                            'set_hostname_failed',
+                            system_error=str(e),
+                        )
                 }), 500
             return {
-                'status': 'error',
-                'message': 'Failed to set hostname',
-                'error': str(e)
+                    **build_error_payload(
+                        'Failed to set hostname',
+                        'set_hostname_failed',
+                        system_error=str(e),
+                    )
             }

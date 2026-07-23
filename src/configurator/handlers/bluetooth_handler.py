@@ -14,6 +14,7 @@ from configurator.bluetooth import (
     get_paired_devices,
     unpair_device,
 )  # type: ignore[import-untyped]
+from .response_utils import error_response
 
 if TYPE_CHECKING:
     from flask import Response
@@ -92,10 +93,12 @@ class BluetoothHandler:
             )
 
             if not pk:
-                return jsonify({  # type: ignore[return-value]
-                    'status': 'error',
-                    'message': 'No passkey provided'
-                }), 400
+                return error_response(
+                    jsonify,
+                    'No passkey provided',
+                    'missing_passkey',
+                    400,
+                )
 
             self.passkey = pk
 
@@ -106,11 +109,13 @@ class BluetoothHandler:
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error setting Bluetooth passkey: %s", e)
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to store passkey",
-                "error": str(e),
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to store passkey",
+                "store_passkey_failed",
+                500,
+                system_error=str(e),
+            )
 
     def handle_set_show_modal(self) -> Union["Response", tuple["Response", int]]:
         """Store a modal request payload or identifier.
@@ -128,10 +133,12 @@ class BluetoothHandler:
             )
 
             if not modal:
-                return jsonify({  # type: ignore[return-value]
-                    'status': 'error',
-                    'message': 'No modal value provided'
-                }), 400
+                return error_response(
+                    jsonify,
+                    'No modal value provided',
+                    'missing_modal_value',
+                    400,
+                )
 
             self.show_modal = modal
 
@@ -142,11 +149,13 @@ class BluetoothHandler:
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error setting modal: %s", e)
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to store modal request",
-                "error": str(e),
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to store modal request",
+                "store_modal_failed",
+                500,
+                system_error=str(e),
+            )
 
     def handle_get_show_modal(self) -> Union["Response", tuple["Response", int]]:
         """Return the stored modal request and clear it.
@@ -177,11 +186,13 @@ class BluetoothHandler:
             })
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error getting bluetooth settings: %s", e)
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to retrieve bluetooth settings",
-                "error": str(e),
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to retrieve bluetooth settings",
+                "bluetooth_settings_read_failed",
+                500,
+                system_error=str(e),
+            )
 
     def handle_set_bluetooth_settings(self) -> Union["Response", tuple["Response", int]]:
         """Handle POST request for bluetooth settings.
@@ -199,11 +210,13 @@ class BluetoothHandler:
             })
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error setting bluetooth settings: %s", e)
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to set bluetooth settings",
-                "error": str(e),
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to set bluetooth settings",
+                "bluetooth_settings_write_failed",
+                500,
+                system_error=str(e),
+            )
 
     def handle_get_paired_devices(self) -> Union["Response", tuple["Response", int]]:
         """Handle GET request for paired devices.
@@ -219,11 +232,13 @@ class BluetoothHandler:
             })
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error getting paired devices: %s", e)
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to retrieve paired devices",
-                "error": str(e),
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to retrieve paired devices",
+                "paired_devices_read_failed",
+                500,
+                system_error=str(e),
+            )
 
     def handle_unpair_device(self) -> Union["Response", tuple["Response", int]]:
         """Handle POST request to unpair a device.
@@ -242,14 +257,18 @@ class BluetoothHandler:
             })
         except ValueError as e:
             logger.error("Error unpairing device: %s", e)
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": str(e),
-            }), 400
+            return error_response(
+                jsonify,
+                str(e),
+                "invalid_unpair_request",
+                400,
+            )
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error unpairing device: %s", e)
-            return jsonify({
-                "status": "error",
-                "message": "Failed to unpair device",
-                "error": str(e),
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to unpair device",
+                "unpair_failed",
+                500,
+                system_error=str(e),
+            )

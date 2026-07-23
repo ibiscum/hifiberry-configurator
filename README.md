@@ -36,6 +36,8 @@ python setup.py install
 
 Comprehensive documentation is available in the `docs/` directory:
 
+- **[Application Architecture](docs/architecture.md)** - How the `config-server` and command-line tools are bound together.
+- **[Debian Package Installation](docs/debian-package.md)** - How the application is installed and integrated on a Debian-based system.
 - **[API Documentation](docs/api-documentation.md)** - Complete REST API reference with examples
 - **[Version Management](docs/version-management.md)** - Version management and release process
 - **[cmdline Command Flow](docs/cmdline-command-flow.md)** - Execution flow for config-cmdline and cmdline.txt updates

@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from typing import Any, Tuple
 from unittest.mock import MagicMock, patch
 
 
@@ -28,6 +29,13 @@ class MockResponse:
 def mock_jsonify(data):
     """Mock Flask jsonify function."""
     return MockResponse(data, 200)
+
+
+def unwrap_response(result: Any) -> Tuple[MockResponse, int]:
+    """Normalize handler return values into (response, status_code)."""
+    if isinstance(result, tuple):
+        return result[0], result[1]
+    return result, 200
 
 
 flask_mock = MagicMock()
@@ -229,7 +237,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
             mock_request.is_json = True
             mock_request.get_json.return_value = {"directory": tmpdir}
 
-            response = self.handler.handle_list_symlinks()
+            response, _ = unwrap_response(self.handler.handle_list_symlinks())
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
@@ -260,7 +268,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
                 "configurator.handlers.filesystem_handler.os.readlink",
                 side_effect=readlink_side_effect,
             ):
-                response = self.handler.handle_list_symlinks()
+                response, _ = unwrap_response(self.handler.handle_list_symlinks())
 
             data = response.get_json()
             self.assertEqual(response.status_code, 200)
@@ -303,7 +311,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
                     "configurator.handlers.filesystem_handler.os.lstat",
                     side_effect=lstat_side_effect,
                 ):
-                    response = self.handler.handle_list_symlinks()
+                        response, _ = unwrap_response(self.handler.handle_list_symlinks())
 
             data = response.get_json()
             self.assertEqual(response.status_code, 200)
@@ -321,7 +329,8 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
 
         self.assertEqual(status_code, 500)
         self.assertEqual(data["status"], "error")
-        self.assertEqual(data["error"], "request parse failure")
+        self.assertEqual(data["error"], "list_symlinks_failed")
+        self.assertEqual(data["data"]["system_error"], "request parse failure")
 
 
 class TestFilesystemHandlerFileExists(unittest.TestCase):
@@ -391,7 +400,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
             mock_request.is_json = True
             mock_request.get_json.return_value = {"path": tmp_file.name}
 
-            response = self.handler.handle_file_exists()
+            response, _ = unwrap_response(self.handler.handle_file_exists())
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
@@ -407,7 +416,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
             mock_request.is_json = True
             mock_request.get_json.return_value = {"path": missing_path}
 
-            response = self.handler.handle_file_exists()
+            response, _ = unwrap_response(self.handler.handle_file_exists())
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
@@ -429,7 +438,8 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(status_code, 500)
         self.assertEqual(data["status"], "error")
-        self.assertEqual(data["error"], "boom")
+        self.assertEqual(data["error"], "file_exists_check_failed")
+        self.assertEqual(data["data"]["system_error"], "boom")
 
     @patch("configurator.handlers.filesystem_handler.request")
     def test_request_json_parse_error_returns_500(self, mock_request):
@@ -443,7 +453,8 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
 
         self.assertEqual(status_code, 500)
         self.assertEqual(data["status"], "error")
-        self.assertEqual(data["error"], "request parse failure")
+        self.assertEqual(data["error"], "file_exists_check_failed")
+        self.assertEqual(data["data"]["system_error"], "request parse failure")
 
 
 if __name__ == "__main__":

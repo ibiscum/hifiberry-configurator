@@ -498,7 +498,7 @@ class TestVolumeHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['volume'], 50)
 
-    @patch('configurator.handlers.volume_handler.request')                                                                                                                                                                                                                                                                                     .handlers.volume_handler.get_headphone_volume')
+    @patch('configurator.handlers.volume_handler.get_headphone_volume')
     def test_get_volume_fractional_input(self, mock_get_volume):
         """Test getting volume handles fractional values from backend"""
         mock_get_volume.return_value = (75.5, 'Headphone')

@@ -504,9 +504,7 @@ class TestPlayerRegistryHandler(unittest.TestCase):
 
         mock_request = Mock()
         mock_request.get_json.return_value = {"enabled": False}
-        with patch.object(
-            sys.modules["flask"], "request", mock_request
-        ), patch("configurator.handlers.player_registry_handler.request", mock_request):
+        with patch("configurator.handlers.player_registry_handler.request", mock_request):
             response, status_code = unwrap_response(
                 self.handler.handle_set_player_settings("testsvc")
             )
@@ -537,12 +535,11 @@ class TestPlayerRegistryHandler(unittest.TestCase):
 
         mock_request = Mock()
         mock_request.get_json.return_value = {"unknown": True}
-        with patch.object(
-            sys.modules["flask"], "request", mock_request
-        ), patch("configurator.handlers.player_registry_handler.request", mock_request):
+        with patch("configurator.handlers.player_registry_handler.request", mock_request):
             response = self.handler.handle_set_player_settings("testsvc")
             self.assertEqual(response[1], 400)
             self.assertEqual(response[0].json_data["status"], "error")
+            self.assertEqual(response[0].json_data["error"], "invalid_player_settings")
 
 
 if __name__ == "__main__":

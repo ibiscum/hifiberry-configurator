@@ -8,6 +8,7 @@ Provides API endpoints for managing ALSA volume controls including headphone vol
 import logging
 from typing import Dict, Any, Optional, Union, cast
 from flask import request, jsonify, Response
+from .response_utils import error_response
 from ..volume import (  # type: ignore[import-untyped]
     get_available_headphone_controls,
     get_headphone_volume,
@@ -46,11 +47,13 @@ class VolumeHandler:
 
         except Exception as e:
             logger.error(f"Error listing headphone controls: {e}")
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to list headphone controls",
-                "error": str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to list headphone controls",
+                "list_headphone_controls_failed",
+                500,
+                system_error=str(e),
+            )
 
     def handle_get_headphone_volume(self) -> 'Union[Response, tuple[Response, int]]':
         """
@@ -71,18 +74,22 @@ class VolumeHandler:
                     }
                 })
             else:
-                return jsonify({  # type: ignore[return-value]
-                    "status": "error",
-                    "message": "No headphone volume controls available on this sound card"
-                }), 404
+                return error_response(
+                    jsonify,
+                    "No headphone volume controls available on this sound card",
+                    "headphone_control_not_found",
+                    404,
+                )
 
         except Exception as e:
             logger.error(f"Error getting headphone volume: {e}")
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to get headphone volume",
-                "error": str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to get headphone volume",
+                "get_headphone_volume_failed",
+                500,
+                system_error=str(e),
+            )
 
     def handle_set_headphone_volume(self) -> 'Union[Response, tuple[Response, int]]':
         """
@@ -100,31 +107,39 @@ class VolumeHandler:
             # Parse JSON request
             data: Dict[str, Any] = cast(Dict[str, Any], request.get_json() or {})
             if not data:
-                return jsonify({  # type: ignore[return-value]
-                    "status": "error",
-                    "message": "No JSON data provided"
-                }), 400
+                return error_response(
+                    jsonify,
+                    "No JSON data provided",
+                    "missing_json_body",
+                    400,
+                )
 
             volume: Optional[Any] = data.get('volume')
             if volume is None:
-                return jsonify({  # type: ignore[return-value]
-                    "status": "error",
-                    "message": "volume parameter is required"
-                }), 400
+                return error_response(
+                    jsonify,
+                    "volume parameter is required",
+                    "missing_volume_parameter",
+                    400,
+                )
 
             # Validate volume range
             try:
                 volume_int: int = int(volume)
                 if volume_int < 0 or volume_int > 100:
-                    return jsonify({  # type: ignore[return-value]
-                        "status": "error",
-                        "message": "Volume must be between 0 and 100"
-                    }), 400
+                    return error_response(
+                        jsonify,
+                        "Volume must be between 0 and 100",
+                        "invalid_volume_range",
+                        400,
+                    )
             except (ValueError, TypeError):
-                return jsonify({  # type: ignore[return-value]
-                    "status": "error",
-                    "message": "Volume must be a valid integer"
-                }), 400
+                return error_response(
+                    jsonify,
+                    "Volume must be a valid integer",
+                    "invalid_volume_type",
+                    400,
+                )
 
             # Set the volume
             result: bool = set_headphone_volume(str(volume_int))  # type: ignore[arg-type]
@@ -138,18 +153,22 @@ class VolumeHandler:
                     }
                 })
             else:
-                return jsonify({  # type: ignore[return-value]
-                    "status": "error",
-                    "message": "No headphone volume controls available on this sound card"
-                }), 404
+                return error_response(
+                    jsonify,
+                    "No headphone volume controls available on this sound card",
+                    "headphone_control_not_found",
+                    404,
+                )
 
         except Exception as e:
             logger.error(f"Error setting headphone volume: {e}")
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to set headphone volume",
-                "error": str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to set headphone volume",
+                "set_headphone_volume_failed",
+                500,
+                system_error=str(e),
+            )
 
     def handle_store_headphone_volume(self) -> 'Union[Response, tuple[Response, int]]':
         """
@@ -167,18 +186,22 @@ class VolumeHandler:
                     "message": "Headphone volume stored successfully"
                 })
             else:
-                return jsonify({  # type: ignore[return-value]
-                    "status": "error",
-                    "message": "No headphone volume controls available on this sound card"
-                }), 404
+                return error_response(
+                    jsonify,
+                    "No headphone volume controls available on this sound card",
+                    "headphone_control_not_found",
+                    404,
+                )
 
         except Exception as e:
             logger.error(f"Error storing headphone volume: {e}")
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to store headphone volume",
-                "error": str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to store headphone volume",
+                "store_headphone_volume_failed",
+                500,
+                system_error=str(e),
+            )
 
     def handle_restore_headphone_volume(self) -> 'Union[Response, tuple[Response, int]]':
         """
@@ -196,15 +219,19 @@ class VolumeHandler:
                     "message": "Headphone volume restored successfully"
                 })
             else:
-                return jsonify({  # type: ignore[return-value]
-                    "status": "error",
-                    "message": "No headphone volume settings found or no compatible controls available"
-                }), 404
+                return error_response(
+                    jsonify,
+                    "No headphone volume settings found or no compatible controls available",
+                    "headphone_volume_restore_source_not_found",
+                    404,
+                )
 
         except Exception as e:
             logger.error(f"Error restoring headphone volume: {e}")
-            return jsonify({  # type: ignore[return-value]
-                "status": "error",
-                "message": "Failed to restore headphone volume",
-                "error": str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                "Failed to restore headphone volume",
+                "restore_headphone_volume_failed",
+                500,
+                system_error=str(e),
+            )

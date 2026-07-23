@@ -14,6 +14,7 @@ import threading
 import time
 import traceback
 from typing import Any, Dict, List, Union, cast, TYPE_CHECKING
+from .response_utils import error_response
 
 if TYPE_CHECKING:
     from flask import Response
@@ -80,11 +81,13 @@ class ScriptHandler:  # pylint: disable=too-many-return-statements
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error listing scripts: %s", e)
             logger.debug(traceback.format_exc())
-            return jsonify({
-                'status': 'error',
-                'message': 'Failed to list scripts',
-                'error': str(e)
-            }), 500  # type: ignore[return-value]
+            return error_response(
+                jsonify,
+                'Failed to list scripts',
+                'list_scripts_failed',
+                500,
+                system_error=str(e),
+            )
 
     def handle_execute_script(
         self, script_id: str
@@ -171,11 +174,14 @@ class ScriptHandler:  # pylint: disable=too-many-return-statements
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error executing script %s: %s", script_id, e)
             logger.debug(traceback.format_exc())
-            return jsonify({
-                'status': 'error',
-                'message': f'Failed to execute script "{script_id}"',
-                'error': str(e)
-            }), 500  # type: ignore[return-value]
+            return error_response(
+                jsonify,
+                f'Failed to execute script "{script_id}"',
+                'script_execution_failed',
+                500,
+                data={'script_id': script_id},
+                system_error=str(e),
+            )
 
     def _execute_script_sync(
         self,
@@ -326,8 +332,11 @@ class ScriptHandler:  # pylint: disable=too-many-return-statements
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error getting script info for %s: %s", script_id, e)
             logger.debug(traceback.format_exc())
-            return jsonify({
-                'status': 'error',
-                'message': f'Failed to get information for script "{script_id}"',
-                'error': str(e)
-            }), 500  # type: ignore[return-value]
+            return error_response(
+                jsonify,
+                f'Failed to get information for script "{script_id}"',
+                'script_info_failed',
+                500,
+                data={'script_id': script_id},
+                system_error=str(e),
+            )

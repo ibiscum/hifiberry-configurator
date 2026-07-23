@@ -7,6 +7,7 @@ import threading
 import time
 from typing import Dict, Any, Union, cast, TYPE_CHECKING
 import traceback
+from .response_utils import error_response
 
 if TYPE_CHECKING:
     from flask import Response
@@ -92,11 +93,13 @@ class SystemHandler:
         except Exception as e:
             logger.error("Error handling reboot request: %s", e)
             logger.error(traceback.format_exc())
-            return jsonify({  # type: ignore[return-value]
-                'status': 'error',
-                'message': 'Failed to schedule system reboot',
-                'error': str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                'Failed to schedule system reboot',
+                'reboot_schedule_failed',
+                500,
+                system_error=str(e),
+            )
 
     def handle_shutdown(self) -> 'Union[Response, tuple[Response, int]]':
         """
@@ -151,8 +154,10 @@ class SystemHandler:
         except Exception as e:
             logger.error("Error handling shutdown request: %s", e)
             logger.error(traceback.format_exc())
-            return jsonify({  # type: ignore[return-value]
-                'status': 'error',
-                'message': 'Failed to schedule system shutdown',
-                'error': str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                'Failed to schedule system shutdown',
+                'shutdown_schedule_failed',
+                500,
+                system_error=str(e),
+            )

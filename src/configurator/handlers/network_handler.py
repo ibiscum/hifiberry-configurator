@@ -5,6 +5,7 @@ import logging
 from typing import Any, Dict, TYPE_CHECKING, Union, cast
 
 from configurator.network import get_network_config
+from .response_utils import error_response
 
 # Type alias for network config
 NetworkConfig = Dict[str, Any]
@@ -43,8 +44,10 @@ class NetworkHandler:  # pylint: disable=too-few-public-methods
             })
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error getting network configuration: %s", e)
-            return jsonify({  # type: ignore[return-value]
-                'status': 'error',
-                'message': 'Failed to retrieve network configuration',
-                'error': str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                'Failed to retrieve network configuration',
+                'network_config_failed',
+                500,
+                system_error=str(e),
+            )

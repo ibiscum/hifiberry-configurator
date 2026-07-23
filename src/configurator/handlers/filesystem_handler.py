@@ -6,12 +6,13 @@ import json
 from flask import jsonify, request, Response
 from typing import Dict, List, Any, Union, cast
 import traceback
+from .response_utils import error_response
 
 logger = logging.getLogger(__name__)
 
 class FilesystemHandler:
     """Handler for filesystem related API endpoints"""
-    
+
     def __init__(self, config_file: str = "/etc/configserver/configserver.json") -> None:
         """Initialize the filesystem handler"""
         logger.debug("Initializing FilesystemHandler")
@@ -19,7 +20,7 @@ class FilesystemHandler:
         self.allowed_symlink_destinations: List[str] = []
         self.allowed_exists_check_destinations: List[str] = ['/etc']
         self._load_config()
-    
+
     def _load_config(self) -> None:
         """Load configuration from config file"""
         try:
@@ -39,7 +40,7 @@ class FilesystemHandler:
             logger.error(f"Error loading config: {e}")
             self.allowed_symlink_destinations = []
             self.allowed_exists_check_destinations = ['/etc']
-    
+
     def handle_list_symlinks(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle POST /api/v1/filesystem/symlinks
@@ -52,14 +53,14 @@ class FilesystemHandler:
                     'status': 'error',
                     'message': 'Content-Type must be application/json'
                 }), 400
-            
+
             data: Dict[str, Any] = cast(Dict[str, Any], request.get_json() or {})
             if not data:
                 return jsonify({  # type: ignore[return-value]
                     'status': 'error',
                     'message': 'Missing request body'
                 }), 400
-            
+
             # Validate required fields
             directory: str = cast(str, data.get('directory'))
             if not directory:
@@ -67,10 +68,10 @@ class FilesystemHandler:
                     'status': 'error',
                     'message': 'Missing required field: directory'
                 }), 400
-            
+
             # Normalize the path to prevent path traversal attacks (e.g. "../.." segments)
             directory = os.path.normpath(directory)
-            
+
             # Check if directory access is allowed
             if not self.allowed_symlink_destinations:
                 return jsonify({  # type: ignore[return-value]
@@ -78,14 +79,14 @@ class FilesystemHandler:
                     'message': 'Directory access is not allowed - no destinations configured',
                     'error': 'directory_access_not_allowed'
                 }), 403
-            
+
             # Validate directory is in allowed list
             directory_allowed: bool = False
             for allowed_dest in self.allowed_symlink_destinations:
                 if directory.startswith(allowed_dest):
                     directory_allowed = True
                     break
-            
+
             if not directory_allowed:
                 return jsonify({  # type: ignore[return-value]
                     'status': 'error',
@@ -96,7 +97,7 @@ class FilesystemHandler:
                         'allowed_destinations': self.allowed_symlink_destinations
                     }
                 }), 403
-            
+
             # Validate path exists and is a directory
             if not os.path.exists(directory):
                 return jsonify({  # type: ignore[return-value]
@@ -106,7 +107,7 @@ class FilesystemHandler:
                         'directory': directory
                     }
                 }), 404
-            
+
             if not os.path.isdir(directory):
                 return jsonify({  # type: ignore[return-value]
                     'status': 'error',
@@ -115,7 +116,7 @@ class FilesystemHandler:
                         'directory': directory
                     }
                 }), 400
-            
+
             # Get symlinks
             try:
                 symlinks: List[Dict[str, Any]] = []
@@ -125,16 +126,16 @@ class FilesystemHandler:
                         try:
                             # Get symlink target
                             target: str = os.readlink(item_path)
-                            
+
                             # Check if target exists
                             target_exists: bool = os.path.exists(item_path)  # This follows the symlink
-                            
+
                             # Get absolute target path
                             if not os.path.isabs(target):
                                 abs_target: str = os.path.abspath(os.path.join(directory, target))
                             else:
                                 abs_target = target
-                            
+
                             # Get symlink info
                             try:
                                 stat_info = os.lstat(item_path)  # lstat doesn't follow symlinks
@@ -164,10 +165,10 @@ class FilesystemHandler:
                                 'path': item_path,
                                 'error': f'Cannot read symlink target: {str(e)}'
                             }))
-                
+
                 # Sort symlinks by name
                 symlinks.sort(key=lambda x: cast(str, x['name']).lower())
-                
+
                 return jsonify({  # type: ignore[return-value]
                     'status': 'success',
                     'message': 'Symlinks listed successfully',
@@ -177,7 +178,7 @@ class FilesystemHandler:
                         'count': len(symlinks)
                     }
                 })
-                
+
             except PermissionError:
                 return jsonify({  # type: ignore[return-value]
                     'status': 'error',
@@ -186,16 +187,18 @@ class FilesystemHandler:
                         'directory': directory
                     }
                 }), 403
-                
+
         except Exception as e:
             logger.error(f"Error listing symlinks: {e}")
             logger.debug(traceback.format_exc())
-            return jsonify({  # type: ignore[return-value]
-                'status': 'error',
-                'message': 'Failed to list symlinks',
-                'error': str(e)
-            }), 500
-    
+            return error_response(
+                jsonify,
+                'Failed to list symlinks',
+                'list_symlinks_failed',
+                500,
+                system_error=str(e),
+            )
+
     def handle_file_exists(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle POST /api/v1/filesystem/file-exists
@@ -208,14 +211,14 @@ class FilesystemHandler:
                     'status': 'error',
                     'message': 'Content-Type must be application/json'
                 }), 400
-            
+
             data: Dict[str, Any] = cast(Dict[str, Any], request.get_json() or {})
             if not data:
                 return jsonify({  # type: ignore[return-value]
                     'status': 'error',
                     'message': 'Missing request body'
                 }), 400
-            
+
             # Validate required fields
             path: str = cast(str, data.get('path'))
             if not path:
@@ -223,10 +226,10 @@ class FilesystemHandler:
                     'status': 'error',
                     'message': 'Missing required field: path'
                 }), 400
-            
+
             # Normalize the path to prevent path traversal attacks (e.g. "../.." segments)
             path = os.path.normpath(path)
-            
+
             # Check if directory access is allowed
             if not self.allowed_exists_check_destinations:
                 return jsonify({  # type: ignore[return-value]
@@ -234,14 +237,14 @@ class FilesystemHandler:
                     'message': 'File access is not allowed - no destinations configured',
                     'error': 'file_access_not_allowed'
                 }), 403
-            
+
             # Validate path is in allowed list
             path_allowed: bool = False
             for allowed_dest in self.allowed_exists_check_destinations:
                 if path.startswith(allowed_dest):
                     path_allowed = True
                     break
-            
+
             if not path_allowed:
                 return jsonify({  # type: ignore[return-value]
                     'status': 'error',
@@ -252,10 +255,10 @@ class FilesystemHandler:
                         'allowed_destinations': self.allowed_exists_check_destinations
                     }
                 }), 403
-            
+
             # Check if path exists
             exists: bool = os.path.exists(path)
-            
+
             return jsonify({  # type: ignore[return-value]
                 'status': 'success',
                 'message': f"File {'exists' if exists else 'does not exist'}",
@@ -263,12 +266,14 @@ class FilesystemHandler:
                     'exists': exists
                 }
             })
-            
+
         except Exception as e:
             logger.error(f"Error checking file existence: {e}")
             logger.debug(traceback.format_exc())
-            return jsonify({  # type: ignore[return-value]
-                'status': 'error',
-                'message': 'Failed to check file existence',
-                'error': str(e)
-            }), 500
+            return error_response(
+                jsonify,
+                'Failed to check file existence',
+                'file_exists_check_failed',
+                500,
+                system_error=str(e),
+            )

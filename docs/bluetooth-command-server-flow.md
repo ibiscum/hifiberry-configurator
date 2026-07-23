@@ -99,7 +99,10 @@ The following endpoints are registered in src/server.py:
 1. Route calls BLEProvisioningHandler.handle_get_status.
 2. Handler executes:
    - systemctl is-active ble-provisioning
-3. It returns active state and systemctl output-derived state.
+3. It returns active state and systemctl output-derived state in a standardized payload:
+   - `status`: `success`
+   - `message`: human-readable summary
+   - `data`: object with `active` and `state`
 
 ### Start Flow
 
@@ -111,6 +114,16 @@ The following endpoints are registered in src/server.py:
    - systemctl daemon-reload
 4. Handler starts service:
    - systemctl start ble-provisioning
+
+Response behavior:
+
+- Success: standardized payload with `status=success`, `message`, and
+   `data.service`.
+- Failure: HTTP 500 with standardized error payload containing:
+   - `status=error`
+   - `message`
+   - `error` code (`start_failed` or `start_exception`)
+   - `data` details (for example `stderr` or `system_error`)
 
 Reason for runtime override:
 
@@ -125,6 +138,16 @@ Reason for runtime override:
 3. Handler removes runtime override directory.
 4. Handler reloads unit files:
    - systemctl daemon-reload
+
+Response behavior:
+
+- Success: standardized payload with `status=success`, `message`, and
+   `data.service`.
+- Failure: HTTP 500 with standardized error payload containing:
+   - `status=error`
+   - `message`
+   - `error` code (`stop_failed` or `stop_exception`)
+   - `data` details (for example `stderr` or `system_error`)
 
 ## systemd to BLE Runtime Flow
 
@@ -186,7 +209,13 @@ Read callback returns:
 
 ## Error Handling Notes
 
-- BLE HTTP handler returns structured 500 responses with captured exception message.
+- BLE HTTP handler uses standardized error payloads with explicit error codes and
+   detail fields, including:
+   - `status_check_failed`
+   - `start_failed`
+   - `start_exception`
+   - `stop_failed`
+   - `stop_exception`
 - Bluetooth DBus functions log DBusError separately and re-raise.
 - BLE runtime logs operation errors and generally keeps service alive unless startup/loop fails.
 

@@ -7,6 +7,7 @@ import json
 import os
 from typing import Dict, List, Any, Optional, Union, cast
 import traceback
+from .response_utils import build_error_payload
 
 from ..sambaclient import (
     list_all_servers,
@@ -135,9 +136,11 @@ class SMBHandler:
             logger.error(f"Error listing SMB servers: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
-                'status': 'error',
-                'message': 'Failed to list SMB servers',
-                'error': str(e)
+                **build_error_payload(
+                    'Failed to list SMB servers',
+                    'list_smb_servers_failed',
+                    system_error=str(e),
+                )
             }), 500
 
     def handle_test_connection(self, server: str) -> 'Union[Response, tuple[Response, int]]':
@@ -193,14 +196,16 @@ class SMBHandler:
             logger.error(f"Error testing connection to {test_server}: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
-                'status': 'error',
-                'message': 'Internal server error',
-                'data': {
-                    'server': test_server,
-                    'connected': False,
-                    'error': str(e)
-                }
-            })
+                **build_error_payload(
+                    'Internal server error',
+                    'smb_connection_test_failed',
+                    data={
+                        'server': test_server,
+                        'connected': False,
+                    },
+                    system_error=str(e),
+                )
+            }), 500
 
     def handle_list_shares(self) -> 'Union[Response, tuple[Response, int]]':
         """
@@ -267,9 +272,11 @@ class SMBHandler:
             logger.error(f"Error listing shares on {target_server}: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
-                'status': 'error',
-                'message': f'Failed to list shares on {target_server}',
-                'error': str(e)
+                **build_error_payload(
+                    f'Failed to list shares on {target_server}',
+                    'list_smb_shares_failed',
+                    system_error=str(e),
+                )
             }), 500
 
     def handle_list_mounts(self) -> 'Union[Response, tuple[Response, int]]':
@@ -310,9 +317,11 @@ class SMBHandler:
             logger.error(f"Error listing SMB mounts: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
-                'status': 'error',
-                'message': 'Failed to list SMB mounts',
-                'error': str(e)
+                **build_error_payload(
+                    'Failed to list SMB mounts',
+                    'list_smb_mounts_failed',
+                    system_error=str(e),
+                )
             }), 500
 
     def handle_manage_mount(self) -> 'Union[Response, tuple[Response, int]]':

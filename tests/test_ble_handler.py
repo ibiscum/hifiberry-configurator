@@ -8,6 +8,7 @@ status checking, starting (with network check override), and stopping.
 
 import unittest
 from unittest.mock import Mock, patch, MagicMock
+from typing import Any, Tuple
 
 # Mock Flask before importing handler
 import sys
@@ -47,6 +48,13 @@ def mock_jsonify(data):
     """Mock Flask jsonify function"""
     return MockResponse(data, 200)
 
+
+def get_response(result: Any) -> Tuple[MockResponse, int]:
+    """Extract response object and status code from handler return values."""
+    if isinstance(result, tuple):
+        return result[0], result[1]
+    return result, 200
+
 flask_mock = MagicMock()
 flask_mock.jsonify = mock_jsonify
 flask_mock.Response = MockResponse
@@ -70,7 +78,7 @@ class TestBLEProvisioningHandlerGetStatus(unittest.TestCase):
         mock_result.stdout = "active\n"
         mock_run.return_value = mock_result
 
-        response = self.handler.handle_get_status()
+        response, _ = get_response(self.handler.handle_get_status())
         data = response.get_json()
 
         self.assertEqual(response.status_code, 200)
@@ -87,7 +95,7 @@ class TestBLEProvisioningHandlerGetStatus(unittest.TestCase):
         mock_result.stdout = ""
         mock_run.return_value = mock_result
 
-        response = self.handler.handle_get_status()
+        response, _ = get_response(self.handler.handle_get_status())
         data = response.get_json()
 
         self.assertEqual(response.status_code, 200)
@@ -100,24 +108,26 @@ class TestBLEProvisioningHandlerGetStatus(unittest.TestCase):
         """Test status check with timeout exception"""
         mock_run.side_effect = TimeoutError("Command timed out")
 
-        response = self.handler.handle_get_status()
+        response, status_code = get_response(self.handler.handle_get_status())
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 500)
+        self.assertEqual(status_code, 500)
         self.assertEqual(data['status'], 'error')
-        self.assertIn('Command timed out', data['message'])
+        self.assertEqual(data['error'], 'status_check_failed')
+        self.assertIn('Command timed out', data['data']['system_error'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_get_status_command_error(self, mock_run):
         """Test status check with generic exception"""
         mock_run.side_effect = Exception("systemctl not found")
 
-        response = self.handler.handle_get_status()
+        response, status_code = get_response(self.handler.handle_get_status())
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 500)
+        self.assertEqual(status_code, 500)
         self.assertEqual(data['status'], 'error')
-        self.assertIn('systemctl not found', data['message'])
+        self.assertEqual(data['error'], 'status_check_failed')
+        self.assertIn('systemctl not found', data['data']['system_error'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_get_status_call_parameters(self, mock_run):
@@ -187,7 +197,8 @@ class TestBLEProvisioningHandlerStart(unittest.TestCase):
 
         self.assertEqual(status_code, 500)
         self.assertEqual(data['status'], 'error')
-        self.assertIn('Permission denied', data['message'])
+        self.assertEqual(data['error'], 'start_exception')
+        self.assertIn('Permission denied', data['data']['system_error'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_start_creates_override(self, mock_run):
@@ -321,7 +332,8 @@ class TestBLEProvisioningHandlerStop(unittest.TestCase):
 
         self.assertEqual(status_code, 500)
         self.assertEqual(data['status'], 'error')
-        self.assertIn('Connection refused', data['message'])
+        self.assertEqual(data['error'], 'stop_exception')
+        self.assertIn('Connection refused', data['data']['system_error'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_stop_calls_systemctl_stop(self, mock_run):
@@ -404,7 +416,7 @@ class TestBLEProvisioningHandlerReturnTypes(unittest.TestCase):
         mock_result.stdout = "active\n"
         mock_run.return_value = mock_result
 
-        result = self.handler.handle_get_status()
+        result, _ = get_response(self.handler.handle_get_status())
         # Response should have get_json method
         self.assertTrue(hasattr(result, 'get_json'))
         self.assertTrue(callable(result.get_json))
@@ -479,14 +491,14 @@ class TestBLEProvisioningHandlerEdgeCases(unittest.TestCase):
         mock_result.stdout = ""
         mock_run.return_value = mock_result
 
-        response = self.handler.handle_get_status()
+        response, _ = get_response(self.handler.handle_get_status())
         data = response.get_json()
 
         self.assertEqual(data['data']['state'], 'unknown')
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_start_with_stderr_in_error_response(self, mock_run):
-        """Test that start includes stderr in error message"""
+        """Test that start includes stderr in error data"""
         mock_result = Mock()
         mock_result.returncode = 1
         mock_result.stderr = "Critical error message"
@@ -495,11 +507,13 @@ class TestBLEProvisioningHandlerEdgeCases(unittest.TestCase):
         response = self.handler.handle_start()
         data, _ = response
 
-        self.assertIn("Critical error message", data.get_json()['message'])
+        payload = data.get_json()
+        self.assertEqual(payload['error'], 'start_failed')
+        self.assertIn("Critical error message", payload['data']['stderr'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_stop_with_stderr_in_error_response(self, mock_run):
-        """Test that stop includes stderr in error message"""
+        """Test that stop includes stderr in error data"""
         mock_result = Mock()
         mock_result.returncode = 1
         mock_result.stderr = "Another error"
@@ -508,7 +522,9 @@ class TestBLEProvisioningHandlerEdgeCases(unittest.TestCase):
         response = self.handler.handle_stop()
         data, _ = response
 
-        self.assertIn("Another error", data.get_json()['message'])
+        payload = data.get_json()
+        self.assertEqual(payload['error'], 'stop_failed')
+        self.assertIn("Another error", payload['data']['stderr'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_get_status_with_extra_whitespace(self, mock_run):
@@ -518,7 +534,7 @@ class TestBLEProvisioningHandlerEdgeCases(unittest.TestCase):
         mock_result.stdout = "  active  \n"
         mock_run.return_value = mock_result
 
-        response = self.handler.handle_get_status()
+        response, _ = get_response(self.handler.handle_get_status())
         data = response.get_json()
 
         self.assertEqual(data['data']['state'], 'active')
@@ -533,19 +549,19 @@ class TestBLEProvisioningHandlerEdgeCases(unittest.TestCase):
         mock_run.return_value = mock_result
 
         # Check status
-        response1, _ = self.handler.handle_get_status()
+        response1, _ = get_response(self.handler.handle_get_status())
         self.assertEqual(response1.get_json()['status'], 'success')
 
         # Stop service
-        response2, _ = self.handler.handle_stop()
+        response2, _ = get_response(self.handler.handle_stop())
         self.assertEqual(response2.get_json()['status'], 'success')
 
         # Start service
-        response3, _ = self.handler.handle_start()
+        response3, _ = get_response(self.handler.handle_start())
         self.assertEqual(response3.get_json()['status'], 'success')
 
         # Check status again
-        response4, _ = self.handler.handle_get_status()
+        response4, _ = get_response(self.handler.handle_get_status())
         self.assertEqual(response4.get_json()['status'], 'success')
 
 

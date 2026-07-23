@@ -25,6 +25,29 @@
 
 The HiFiBerry Configuration API provides REST endpoints for managing configuration settings and system services in the HiFiBerry system. All responses are in JSON format with consistent structure.
 
+### Error Response Envelope
+
+All API error responses are normalized to this envelope:
+
+```json
+{
+  "status": "error",
+  "message": "Human-readable error summary",
+  "error": "machine_readable_error_code",
+  "data": {
+    "system_error": "Optional low-level detail"
+  }
+}
+```
+
+Notes:
+
+- `status` is always `error` for failed operations.
+- `message` is intended for user-facing diagnostics.
+- `error` is a machine-readable error code for client logic.
+- `data` is always an object in error responses and may include
+  operation-specific details like `system_error`.
+
 > **Note:** Replace localhost with your actual server address. The default port is 1081.
 
 ## Related Docs

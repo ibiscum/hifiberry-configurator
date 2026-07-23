@@ -11,6 +11,7 @@ import re
 import json
 import logging
 from typing import Dict, Any, List, Optional, Union, Tuple, cast, TYPE_CHECKING
+from .response_utils import error_response
 
 if TYPE_CHECKING:
     from flask import Response
@@ -163,16 +164,22 @@ class PlayerRegistryHandler:
         """Serve an external player icon SVG."""
         if not SAFE_NAME_RE.match(name):
             err_msg = "Invalid icon name"
-            return jsonify(
-                {"status": "error", "message": err_msg}
-            ), 400  # type: ignore[return-value]
+            return error_response(
+                jsonify,
+                err_msg,
+                "invalid_icon_name",
+                400,
+            )
 
         icon_path: str = os.path.join(self.icons_dir, f"{name}.svg")
         if not os.path.isfile(icon_path):
             err_msg = "Icon not found"
-            return jsonify(
-                {"status": "error", "message": err_msg}
-            ), 404  # type: ignore[return-value]
+            return error_response(
+                jsonify,
+                err_msg,
+                "icon_not_found",
+                404,
+            )
 
         try:
             with open(icon_path, "r", encoding="utf-8") as f:
@@ -184,9 +191,13 @@ class PlayerRegistryHandler:
         except OSError as e:
             logger.error("Error reading icon %s: %s", icon_path, e)
             err_msg = "Failed to read icon"
-            return jsonify(
-                {"status": "error", "message": err_msg}
-            ), 500  # type: ignore[return-value]
+            return error_response(
+                jsonify,
+                err_msg,
+                "icon_read_failed",
+                500,
+                system_error=str(e),
+            )
 
     def set_player_settings(
         self, systemd_service: str, values: Dict[str, Any]
@@ -234,9 +245,13 @@ class PlayerRegistryHandler:
         applied, errors = self.set_player_settings(systemd_service, values)
         if not applied and errors:
             error_msg = "; ".join(errors)
-            return jsonify(
-                {"status": "error", "message": error_msg}
-            ), 400  # type: ignore[return-value]
+            return error_response(
+                jsonify,
+                error_msg,
+                "invalid_player_settings",
+                400,
+                data={"errors": errors, "service": systemd_service},
+            )
         return jsonify({
             "status": "success",
             "data": {"applied": applied, "errors": errors}

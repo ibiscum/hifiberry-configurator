@@ -4,6 +4,7 @@
 import importlib
 import sys
 import unittest
+from typing import Any, Tuple
 from unittest.mock import MagicMock, patch
 
 
@@ -26,6 +27,13 @@ class MockResponse:
 def mock_jsonify(data):
     """Mock Flask jsonify helper."""
     return MockResponse(data, 200)
+
+
+def unwrap_response(result: Any) -> Tuple[MockResponse, int]:
+    """Normalize handler return values into (response, status_code)."""
+    if isinstance(result, tuple):
+        return result[0], result[1]
+    return result, 200
 
 
 _ORIGINAL_FLASK_MODULE = sys.modules.get("flask")
@@ -65,7 +73,7 @@ class TestI2CHandler(unittest.TestCase):
             "detected_devices": ["0x48"],
         }
 
-        response = self.handler.handle_get_i2c_devices()
+        response, _ = unwrap_response(self.handler.handle_get_i2c_devices())
         data = response.get_json()
 
         self.assertEqual(response.status_code, 200)
@@ -86,7 +94,7 @@ class TestI2CHandler(unittest.TestCase):
             "error": "I2C bus 1 not found",
         }
 
-        response = self.handler.handle_get_i2c_devices()
+        response, _ = unwrap_response(self.handler.handle_get_i2c_devices())
         data = response.get_json()
 
         self.assertEqual(response.status_code, 200)
@@ -134,7 +142,8 @@ class TestI2CHandler(unittest.TestCase):
         self.assertEqual(status_code, 500)
         self.assertEqual(data["status"], "error")
         self.assertEqual(data["message"], "Failed to scan I2C devices")
-        self.assertEqual(data["error"], "scan failed")
+        self.assertEqual(data["error"], "i2c_scan_failed")
+        self.assertEqual(data["data"]["system_error"], "scan failed")
 
     @patch("configurator.handlers.i2c_handler.get_i2c_info")
     @patch("configurator.handlers.i2c_handler.request")

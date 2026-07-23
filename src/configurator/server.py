@@ -7,6 +7,7 @@ and other system configuration services.
 """
 
 import sys
+import json
 import logging
 import argparse
 from flask import Flask, jsonify
@@ -47,6 +48,7 @@ class ConfigAPIServer:
 
         logger.info("ConfigAPIServer.__init__: Creating Flask app")
         self.app = Flask(__name__)
+        self._register_response_normalizer()
 
         logger.info("ConfigAPIServer.__init__: Creating ConfigDB")
         self.configdb = ConfigDB()
@@ -86,6 +88,63 @@ class ConfigAPIServer:
         self._register_module_settings()
 
         logger.info("ConfigAPIServer.__init__: Initialization complete")
+
+    @staticmethod
+    def _default_error_code(status_code: int) -> str:
+        """Map HTTP status to a normalized machine-readable error code."""
+        if status_code == 400:
+            return 'bad_request'
+        if status_code == 401:
+            return 'unauthorized'
+        if status_code == 403:
+            return 'forbidden'
+        if status_code == 404:
+            return 'not_found'
+        if status_code == 409:
+            return 'conflict'
+        if status_code >= 500:
+            return 'internal_error'
+        return 'operation_failed'
+
+    def _register_response_normalizer(self) -> None:
+        """Ensure all API error payloads follow the same envelope."""
+        @self.app.after_request
+        def normalize_error_response(response):
+            if not response.is_json:
+                return response
+
+            payload = response.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return response
+
+            if payload.get('status') != 'error':
+                return response
+
+            changed = False
+            data = payload.get('data')
+            if not isinstance(data, dict):
+                data = {}
+                payload['data'] = data
+                changed = True
+
+            error_value = payload.get('error')
+            if not isinstance(error_value, str) or not error_value.strip():
+                payload['error'] = self._default_error_code(response.status_code)
+                changed = True
+            else:
+                # Legacy handlers may put human-readable details into `error`.
+                # Preserve that detail in `data.system_error` and normalize
+                # `error` to a machine-readable code.
+                if (' ' in error_value or ':' in error_value) and 'system_error' not in data:
+                    data['system_error'] = error_value
+                    payload['error'] = self._default_error_code(response.status_code)
+                    changed = True
+
+            if changed:
+                response.set_data(json.dumps(payload))
+                response.mimetype = 'application/json'
+
+            return response
 
     def _register_module_settings(self):
         """Register settings that should be saved/restored by modules"""

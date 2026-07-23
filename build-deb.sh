@@ -9,6 +9,11 @@ echo "Using version from changelog: $CHANGELOG_VERSION"
 
 # Check if DIST is set by environment variable
 if [ -n "$DIST" ]; then
+    # Common typo guard: Debian "trixie" is frequently mistyped as "trixy".
+    if [ "$DIST" = "trixy" ]; then
+        echo "DIST=trixy is not a valid Debian suite; using DIST=trixie instead"
+        DIST="trixie"
+    fi
     echo "Using distribution from DIST environment variable: $DIST"
     DIST_ARG="--dist=$DIST"
 else

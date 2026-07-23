@@ -13,6 +13,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from typing import Any, Tuple
 from unittest.mock import Mock, patch, MagicMock
 
 # sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -30,10 +31,21 @@ class MockResponse:  # pylint: disable=too-few-public-methods
         """Return the mocked JSON payload."""
         return self.json_data
 
+    def __iter__(self):
+        """Allow unpacking as (response, status_code) in tests."""
+        return iter([self, self.status_code])
+
 
 def mock_jsonify(data):
     """Mock Flask jsonify function"""
     return MockResponse(data, 200)
+
+
+def unwrap_response(result: Any) -> Tuple[MockResponse, int]:
+    """Normalize handler return values into (response, status_code)."""
+    if isinstance(result, tuple):
+        return result[0], result[1]
+    return result, getattr(result, "status_code", 200)
 
 
 # Patch Flask imports before importing the handler
@@ -137,7 +149,7 @@ class TestScriptHandlerListing(unittest.TestCase):
     def test_list_scripts_empty(self):
         """Return empty list when no scripts configured"""
         handler = ScriptHandler(config_file=self.config_file)
-        response, status_code = handler.handle_list_scripts()
+        response, status_code = unwrap_response(handler.handle_list_scripts())
         self.assertEqual(response.json_data["status"], "success")
         self.assertEqual(response.json_data["data"]["count"], 0)
         self.assertEqual(response.json_data["data"]["scripts"], [])
@@ -157,7 +169,7 @@ class TestScriptHandlerListing(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response, _ = handler.handle_list_scripts()
+        response, _ = unwrap_response(handler.handle_list_scripts())
         self.assertEqual(response.json_data["status"], "success")
         self.assertEqual(response.json_data["data"]["count"], 1)
         scripts = response.json_data["data"]["scripts"]
@@ -176,7 +188,7 @@ class TestScriptHandlerListing(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response, _ = handler.handle_list_scripts()
+        response, _ = unwrap_response(handler.handle_list_scripts())
         self.assertEqual(response.json_data["data"]["count"], 3)
         self.assertEqual(len(response.json_data["data"]["scripts"]), 3)
 
@@ -205,8 +217,8 @@ class TestScriptHandlerExecution(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response = handler.handle_execute_script("unknown")
-        self.assertEqual(response[1], 404)
+        response, status_code = unwrap_response(handler.handle_execute_script("unknown"))
+        self.assertEqual(status_code, 404)
         self.assertEqual(response[0].json_data["status"], "error")
         self.assertEqual(response[0].json_data["error"], "script_not_found")
 
@@ -220,8 +232,8 @@ class TestScriptHandlerExecution(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response = handler.handle_execute_script("broken")
-        self.assertEqual(response[1], 500)
+        response, status_code = unwrap_response(handler.handle_execute_script("broken"))
+        self.assertEqual(status_code, 500)
         self.assertEqual(response[0].json_data["error"], "script_path_missing")
 
     def test_execute_script_path_not_found(self):
@@ -236,8 +248,8 @@ class TestScriptHandlerExecution(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response = handler.handle_execute_script("missing")
-        self.assertEqual(response[1], 404)
+        response, status_code = unwrap_response(handler.handle_execute_script("missing"))
+        self.assertEqual(status_code, 404)
         self.assertEqual(response[0].json_data["error"], "script_path_not_found")
 
     def test_execute_script_not_executable(self):
@@ -256,8 +268,8 @@ class TestScriptHandlerExecution(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response = handler.handle_execute_script("noexec")
-        self.assertEqual(response[1], 403)
+        response, status_code = unwrap_response(handler.handle_execute_script("noexec"))
+        self.assertEqual(status_code, 403)
         self.assertEqual(response[0].json_data["error"], "script_not_executable")
 
     def test_execute_script_sync_success(self):
@@ -278,7 +290,7 @@ class TestScriptHandlerExecution(unittest.TestCase):
         mock_request = Mock()
         mock_request.get_json.return_value = {"background": False}
         with patch("configurator.handlers.script_handler.request", mock_request):
-            response, _ = handler.handle_execute_script("test")
+            response, _ = unwrap_response(handler.handle_execute_script("test"))
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json_data["status"], "success")
             self.assertEqual(response.json_data["data"]["exit_code"], 0)
@@ -303,7 +315,7 @@ class TestScriptHandlerExecution(unittest.TestCase):
         mock_request = Mock()
         mock_request.get_json.return_value = {"background": False, "timeout": 0.1}
         with patch("configurator.handlers.script_handler.request", mock_request):
-            response, status_code = handler.handle_execute_script("sleeper")
+            response, status_code = unwrap_response(handler.handle_execute_script("sleeper"))
             self.assertEqual(status_code, 500)
             self.assertEqual(response.json_data["error"], "execution_timeout")
 
@@ -324,7 +336,7 @@ class TestScriptHandlerExecution(unittest.TestCase):
         mock_request = Mock()
         mock_request.get_json.return_value = {}
         with patch("configurator.handlers.script_handler.request", mock_request):
-            response, _ = handler.handle_execute_script("test")
+            response, _ = unwrap_response(handler.handle_execute_script("test"))
             # Command should include args
             cmd = response.json_data["data"]["command"]
             self.assertIn("arg1", cmd)
@@ -344,7 +356,7 @@ class TestScriptHandlerExecution(unittest.TestCase):
         mock_request = Mock()
         mock_request.get_json.return_value = {"background": True}
         with patch("configurator.handlers.script_handler.request", mock_request):
-            response, _ = handler.handle_execute_script("test")
+            response, _ = unwrap_response(handler.handle_execute_script("test"))
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json_data["status"], "success")
             self.assertEqual(
@@ -366,7 +378,7 @@ class TestScriptHandlerExecution(unittest.TestCase):
         mock_request = Mock()
         mock_request.get_json.return_value = {"background": False, "timeout": 5000}
         with patch("configurator.handlers.script_handler.request", mock_request):
-            response, _ = handler.handle_execute_script("test")
+            response, _ = unwrap_response(handler.handle_execute_script("test"))
             # Should clamp to 3600 (1 hour)
             self.assertEqual(response.status_code, 200)
 
@@ -384,7 +396,7 @@ class TestScriptHandlerExecution(unittest.TestCase):
         mock_request = Mock()
         mock_request.get_json.side_effect = ValueError("Invalid JSON")
         with patch("configurator.handlers.script_handler.request", mock_request):
-            response, status_code = handler.handle_execute_script("test")
+            response, status_code = unwrap_response(handler.handle_execute_script("test"))
             # Should still execute with default params
             self.assertIn(response.status_code, [200, 500])
 
@@ -413,7 +425,7 @@ class TestScriptHandlerInfo(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response, status_code = handler.handle_get_script_info("unknown")
+        response, status_code = unwrap_response(handler.handle_get_script_info("unknown"))
         self.assertEqual(status_code, 404)
 
     def test_get_script_info_exists_executable(self):
@@ -431,7 +443,7 @@ class TestScriptHandlerInfo(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response, _ = handler.handle_get_script_info("test")
+        response, _ = unwrap_response(handler.handle_get_script_info("test"))
         self.assertEqual(response.status_code, 200)
         data = response.json_data["data"]
         self.assertEqual(data["id"], "test")
@@ -453,7 +465,7 @@ class TestScriptHandlerInfo(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response, _ = handler.handle_get_script_info("missing")
+        response, _ = unwrap_response(handler.handle_get_script_info("missing"))
         self.assertEqual(response.status_code, 200)
         data = response.json_data["data"]
         self.assertFalse(data["path_exists"])
@@ -475,7 +487,7 @@ class TestScriptHandlerInfo(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response, _ = handler.handle_get_script_info("noexec")
+        response, _ = unwrap_response(handler.handle_get_script_info("noexec"))
         data = response.json_data["data"]
         self.assertTrue(data["path_exists"])
         self.assertFalse(data["path_executable"])
@@ -498,7 +510,7 @@ class TestScriptHandlerEdgeCases(unittest.TestCase):
     def test_handle_list_scripts_with_exception(self):
         """Handle unexpected exception in list_scripts"""
         handler = ScriptHandler(config_file=self.config_file)
-        response, status  = handler.handle_list_scripts()
+        response, status = unwrap_response(handler.handle_list_scripts())
         # Should return success response even with empty scripts
         self.assertEqual(status, 200)
 
@@ -519,7 +531,7 @@ class TestScriptHandlerEdgeCases(unittest.TestCase):
         mock_request.get_json.return_value = None
         with patch("configurator.handlers.script_handler.request", mock_request):
             # Should use default values
-            response, status_code = handler.handle_execute_script("test")
+            response, status_code = unwrap_response(handler.handle_execute_script("test"))
             # Script doesn't exist, so 404 is expected
             self.assertIn(status_code, [404, 500])
 
@@ -535,7 +547,7 @@ class TestScriptHandlerEdgeCases(unittest.TestCase):
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f)
         handler = ScriptHandler(config_file=self.config_file)
-        response, status = handler.handle_list_scripts()
+        response, status = unwrap_response(handler.handle_list_scripts())
         scripts = response.json_data["data"]["scripts"]
         self.assertEqual(status, 200)
         self.assertEqual(scripts[0]["id"], "minimal")
