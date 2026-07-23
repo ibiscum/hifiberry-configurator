@@ -185,6 +185,7 @@ class TestLoadConfig:
             # Modify the cached result
             result1["new_key"] = "new_value"
             # Check that _config was updated
+            assert parser._config is not None
             assert parser._config["new_key"] == "new_value"
         finally:
             os.unlink(temp_path)
@@ -506,14 +507,14 @@ class TestGlobalFunctions:
     def test_get_config_parser_returns_singleton(self):
         """Test that get_config_parser returns a singleton instance"""
         # Clear the global instance first
-        import config_parser as cp_module
+        import configurator.config_parser as cp_module
         cp_module._config_parser = None
 
         parser1 = get_config_parser()
         parser2 = get_config_parser()
         assert parser1 is parser2
 
-    @patch('config_parser.get_config_parser')
+    @patch('configurator.config_parser.get_config_parser')
     def test_get_config_function(self, mock_get_parser):
         """Test module-level get_config function"""
         mock_parser = MagicMock()
@@ -524,7 +525,7 @@ class TestGlobalFunctions:
         assert result == {"test": "config"}
         mock_parser.get_config.assert_called_once()
 
-    @patch('config_parser.get_config_parser')
+    @patch('configurator.config_parser.get_config_parser')
     def test_get_config_section_function(self, mock_get_parser):
         """Test module-level get_config_section function"""
         mock_parser = MagicMock()
@@ -535,7 +536,7 @@ class TestGlobalFunctions:
         assert result == {"section": "data"}
         mock_parser.get_section.assert_called_once_with("test_section", {"default": "value"})
 
-    @patch('config_parser.get_config_parser')
+    @patch('configurator.config_parser.get_config_parser')
     def test_reload_config_function(self, mock_get_parser):
         """Test module-level reload_config function"""
         mock_parser = MagicMock()

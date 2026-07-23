@@ -7,7 +7,7 @@ import logging
 import shutil
 import subprocess
 from typing import List, Dict, Optional, Tuple, Any
-from src.configurator.configdb import ConfigDB
+from configurator.configdb import ConfigDB
 
 # Set up logging
 logger = logging.getLogger(__name__)

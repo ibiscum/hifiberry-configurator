@@ -20,7 +20,7 @@ from io import StringIO
 # Add src directory to path for imports
 sys.path.insert(0, '/home/ulf/data/configurator')
 
-from src.configurator.dsptoolkit import (
+from configurator.dsptoolkit import (
     DSPToolkit, detect_dsp, get_detected_dsp_name, is_dsp_detected,
     DEFAULT_DSP_HOST, DEFAULT_DSP_PORT, DEFAULT_TIMEOUT, VALID_DSP_STATUSES
 )
@@ -86,6 +86,7 @@ class TestDSPDetection(unittest.TestCase):
 
         result = self.toolkit.detect_dsp()
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result.get("status"), "not_detected")
 
     @patch('requests.get')
@@ -305,7 +306,7 @@ class TestGetDSPStatus(unittest.TestCase):
 class TestConvenienceFunctions(unittest.TestCase):
     """Test module-level convenience functions"""
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     def test_convenience_detect_dsp(self, mock_detect):
         """Test convenience detect_dsp function"""
         expected = {"detected_dsp": "ADAU14xx", "status": "detected"}
@@ -314,7 +315,7 @@ class TestConvenienceFunctions(unittest.TestCase):
         result = detect_dsp()
         self.assertEqual(result, expected)
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     def test_convenience_get_detected_dsp_name(self, mock_detect):
         """Test convenience get_detected_dsp_name function"""
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
@@ -322,7 +323,7 @@ class TestConvenienceFunctions(unittest.TestCase):
         name = get_detected_dsp_name()
         self.assertEqual(name, "ADAU14xx")
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     def test_convenience_is_dsp_detected(self, mock_detect):
         """Test convenience is_dsp_detected function"""
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
@@ -330,7 +331,7 @@ class TestConvenienceFunctions(unittest.TestCase):
         result = is_dsp_detected()
         self.assertTrue(result)
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     def test_convenience_functions_with_custom_params(self, mock_detect):
         """Test convenience functions with custom host/port/timeout"""
         expected = {"detected_dsp": "ADAU14xx", "status": "detected"}
@@ -343,11 +344,11 @@ class TestConvenienceFunctions(unittest.TestCase):
 class TestMainCommandLine(unittest.TestCase):
     """Test main command-line interface"""
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     @patch('sys.argv', ['dsptoolkit', '--name-only'])
     def test_main_name_only_detected(self, mock_detect):
         """Test main with --name-only when DSP is detected"""
-        from src.configurator.dsptoolkit import main
+        from configurator.dsptoolkit import main
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -355,21 +356,21 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertEqual(fake_out.getvalue().strip(), "ADAU14xx")
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     @patch('sys.argv', ['dsptoolkit', '--name-only'])
     def test_main_name_only_not_detected(self, mock_detect):
         """Test main with --name-only when DSP is not detected"""
-        from src.configurator.dsptoolkit import main
+        from configurator.dsptoolkit import main
         mock_detect.return_value = None
 
         result = main()
         self.assertEqual(result, 1)
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     @patch('sys.argv', ['dsptoolkit', '--status-only'])
     def test_main_status_only_detected(self, mock_detect):
         """Test main with --status-only when DSP is detected"""
-        from src.configurator.dsptoolkit import main
+        from configurator.dsptoolkit import main
         mock_detect.return_value = {"status": "detected"}
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -377,11 +378,11 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertEqual(fake_out.getvalue().strip(), "detected")
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     @patch('sys.argv', ['dsptoolkit', '--status-only'])
     def test_main_status_only_not_detected(self, mock_detect):
         """Test main with --status-only when DSP is not detected"""
-        from src.configurator.dsptoolkit import main
+        from configurator.dsptoolkit import main
         mock_detect.return_value = {"status": "not_detected"}
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -389,11 +390,11 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 1)
             self.assertEqual(fake_out.getvalue().strip(), "not_detected")
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     @patch('sys.argv', ['dsptoolkit', '--json'])
     def test_main_json_output(self, mock_detect):
         """Test main with --json output"""
-        from src.configurator.dsptoolkit import main
+        from configurator.dsptoolkit import main
         expected = {"detected_dsp": "ADAU14xx", "status": "detected"}
         mock_detect.return_value = expected
 
@@ -403,11 +404,11 @@ class TestMainCommandLine(unittest.TestCase):
             output_json = json.loads(fake_out.getvalue())
             self.assertEqual(output_json, expected)
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     @patch('sys.argv', ['dsptoolkit', '--json'])
     def test_main_json_unavailable(self, mock_detect):
         """Test main with --json when service is unavailable"""
-        from src.configurator.dsptoolkit import main
+        from configurator.dsptoolkit import main
         mock_detect.return_value = None
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -416,11 +417,11 @@ class TestMainCommandLine(unittest.TestCase):
             output_json = json.loads(fake_out.getvalue())
             self.assertEqual(output_json.get("status"), "unavailable")
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     @patch('sys.argv', ['dsptoolkit'])
     def test_main_default_output_detected(self, mock_detect):
         """Test main with default output when DSP is detected"""
-        from src.configurator.dsptoolkit import main
+        from configurator.dsptoolkit import main
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -428,11 +429,11 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertIn("ADAU14xx", fake_out.getvalue())
 
-    @patch('src.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     @patch('sys.argv', ['dsptoolkit'])
     def test_main_default_output_unavailable(self, mock_detect):
         """Test main with default output when service is unavailable"""
-        from src.configurator.dsptoolkit import main
+        from configurator.dsptoolkit import main
         mock_detect.return_value = None
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -440,11 +441,11 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 1)
             self.assertIn("unavailable", fake_out.getvalue())
 
-    @patch('src.dsptoolkit.DSPToolkit')
+    @patch('configurator.dsptoolkit.DSPToolkit')
     @patch('sys.argv', ['dsptoolkit', '--host', '10.0.0.1', '--port', '8080', '--timeout', '20.0'])
     def test_main_custom_parameters(self, mock_toolkit_class):
         """Test main with custom host/port/timeout parameters"""
-        from src.configurator.dsptoolkit import main
+        from configurator.dsptoolkit import main
         mock_instance = MagicMock()
         mock_toolkit_class.return_value = mock_instance
         mock_instance.detect_dsp.return_value = {"status": "detected"}
@@ -487,6 +488,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
 
         result = self.toolkit.detect_dsp()
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertIn("detected_dsp", result)
 
     @patch('requests.get')
@@ -504,6 +506,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
 
         result = self.toolkit.detect_dsp()
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(len(result), 4)
 
     @patch('requests.get')

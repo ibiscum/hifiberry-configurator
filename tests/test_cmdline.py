@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from src.configurator.cmdline import CmdlineTxt
+from configurator.cmdline import CmdlineTxt
 
 
 class TestCmdlineTxtInitialization:
@@ -17,7 +17,7 @@ class TestCmdlineTxtInitialization:
             cmdline_file = firmware_path / "cmdline.txt"
             cmdline_file.write_text("console=serial0,115200\n")
 
-            with patch("src.cmdline.os.path.exists") as mock_exists:
+            with patch("configurator.cmdline.os.path.exists") as mock_exists:
                 def exists_side_effect(path):
                     if path == str(cmdline_file):
                         return True
@@ -427,7 +427,7 @@ class TestMainFunction:
 
             with patch.object(CmdlineTxt, "_find_cmdline_file", return_value=str(cmdline_file)):
                 with patch("sys.argv", ["cmdline", "--enable-serial-console"]):
-                    from src.configurator.cmdline import main
+                    from configurator.cmdline import main
                     main()
 
                 content = cmdline_file.read_text()
@@ -441,7 +441,7 @@ class TestMainFunction:
 
             with patch.object(CmdlineTxt, "_find_cmdline_file", return_value=str(cmdline_file)):
                 with patch("sys.argv", ["cmdline", "--disable-serial-console"]):
-                    from src.configurator.cmdline import main
+                    from configurator.cmdline import main
                     main()
 
                 content = cmdline_file.read_text()
@@ -455,7 +455,7 @@ class TestMainFunction:
 
             with patch.object(CmdlineTxt, "_find_cmdline_file", return_value=str(cmdline_file)):
                 with patch("sys.argv", ["cmdline", "--enable-ipv6"]):
-                    from src.configurator.cmdline import main
+                    from configurator.cmdline import main
                     main()
 
                 content = cmdline_file.read_text()
@@ -469,7 +469,7 @@ class TestMainFunction:
 
             with patch.object(CmdlineTxt, "_find_cmdline_file", return_value=str(cmdline_file)):
                 with patch("sys.argv", ["cmdline", "--disable-ipv6"]):
-                    from src.configurator.cmdline import main
+                    from configurator.cmdline import main
                     main()
 
                 content = cmdline_file.read_text()

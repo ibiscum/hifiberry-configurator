@@ -13,10 +13,10 @@ import subprocess
 from typing import Dict, Any, Optional, Tuple
 
 # Import from other configurator modules
-from .pimodel import PiModel
-from .hattools import get_hat_info
-from .soundcard import Soundcard
-from .hostname_utils import get_hostnames_with_fallback
+from configurator.pimodel import PiModel
+from configurator.hattools import get_hat_info
+from configurator.soundcard import Soundcard
+from configurator.hostname_utils import get_hostnames_with_fallback
 
 class SystemInfo:
     """Collects and provides system information from various sources"""

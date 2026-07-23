@@ -12,7 +12,7 @@ except ImportError:
     jsonify = None
     request = None
 
-from ..hostname_utils import (
+from configurator.hostname_utils import (
     get_hostnames_with_fallback,
     sanitize_hostname,
     validate_hostname,

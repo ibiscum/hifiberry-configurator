@@ -4,7 +4,7 @@
 import logging
 from typing import Any, Dict, TYPE_CHECKING, Union, cast
 
-from ..network import get_network_config
+from configurator.network import get_network_config
 
 # Type alias for network config
 NetworkConfig = Dict[str, Any]

@@ -13,7 +13,7 @@ except ImportError:
     argcomplete_available = False
 
 # Import the get_hat_info function from hattools
-from src.configurator.hattools import get_hat_info
+from configurator.hattools import get_hat_info
 
 # Constants
 UNKNOWN_CARD_NAME = "Unknown"

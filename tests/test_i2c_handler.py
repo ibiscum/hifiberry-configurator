@@ -35,8 +35,8 @@ flask_mock.request = MagicMock()
 flask_mock.Response = MockResponse
 sys.modules["flask"] = flask_mock
 
-from src.configurator.handlers.i2c_handler import I2CHandler  # noqa: E402  # pylint: disable=wrong-import-position
-importlib.reload(sys.modules["src.handlers.i2c_handler"])
+from configurator.handlers.i2c_handler import I2CHandler  # noqa: E402  # pylint: disable=wrong-import-position
+importlib.reload(sys.modules["configurator.handlers.i2c_handler"])
 
 
 def tearDownModule():
@@ -54,8 +54,8 @@ class TestI2CHandler(unittest.TestCase):
         """Set up handler under test."""
         self.handler = I2CHandler()
 
-    @patch("src.handlers.i2c_handler.get_i2c_info")
-    @patch("src.handlers.i2c_handler.request")
+    @patch("configurator.handlers.i2c_handler.get_i2c_info")
+    @patch("configurator.handlers.i2c_handler.request")
     def test_get_i2c_devices_success_status(self, mock_request, mock_get_i2c_info):
         """Returns success when backend response has no error field."""
         mock_request.args.get.return_value = 1
@@ -72,8 +72,8 @@ class TestI2CHandler(unittest.TestCase):
         self.assertEqual(data["status"], "success")
         self.assertEqual(data["data"]["bus_number"], 1)
 
-    @patch("src.handlers.i2c_handler.get_i2c_info")
-    @patch("src.handlers.i2c_handler.request")
+    @patch("configurator.handlers.i2c_handler.get_i2c_info")
+    @patch("configurator.handlers.i2c_handler.request")
     def test_get_i2c_devices_error_status_when_backend_has_error(
         self,
         mock_request,
@@ -93,7 +93,7 @@ class TestI2CHandler(unittest.TestCase):
         self.assertEqual(data["status"], "error")
         self.assertEqual(data["data"]["error"], "I2C bus 1 not found")
 
-    @patch("src.handlers.i2c_handler.request")
+    @patch("configurator.handlers.i2c_handler.request")
     def test_get_i2c_devices_invalid_bus_negative(self, mock_request):
         """Rejects negative bus number."""
         mock_request.args.get.return_value = -1
@@ -105,7 +105,7 @@ class TestI2CHandler(unittest.TestCase):
         self.assertEqual(data["status"], "error")
         self.assertIn("Invalid bus number", data["message"])
 
-    @patch("src.handlers.i2c_handler.request")
+    @patch("configurator.handlers.i2c_handler.request")
     def test_get_i2c_devices_invalid_bus_too_high(self, mock_request):
         """Rejects out-of-range bus numbers above 10."""
         mock_request.args.get.return_value = 11
@@ -117,8 +117,8 @@ class TestI2CHandler(unittest.TestCase):
         self.assertEqual(data["status"], "error")
         self.assertIn("Invalid bus number", data["message"])
 
-    @patch("src.handlers.i2c_handler.get_i2c_info")
-    @patch("src.handlers.i2c_handler.request")
+    @patch("configurator.handlers.i2c_handler.get_i2c_info")
+    @patch("configurator.handlers.i2c_handler.request")
     def test_get_i2c_devices_backend_exception_returns_500(
         self,
         mock_request,
@@ -136,8 +136,8 @@ class TestI2CHandler(unittest.TestCase):
         self.assertEqual(data["message"], "Failed to scan I2C devices")
         self.assertEqual(data["error"], "scan failed")
 
-    @patch("src.handlers.i2c_handler.get_i2c_info")
-    @patch("src.handlers.i2c_handler.request")
+    @patch("configurator.handlers.i2c_handler.get_i2c_info")
+    @patch("configurator.handlers.i2c_handler.request")
     def test_get_i2c_devices_reads_bus_query_with_expected_parameters(
         self,
         mock_request,

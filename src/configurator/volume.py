@@ -18,8 +18,8 @@ except ImportError:
     alsa_available = False  # type: ignore[assignment]
     logging.warning("alsaaudio module not available, falling back to subprocess calls")
 
-from src.configurator.configdb import ConfigDB
-from src.configurator.soundcard import Soundcard
+from configurator.configdb import ConfigDB
+from configurator.soundcard import Soundcard
 
 # Configuration keys for volume storage
 VOLUME_DB_KEY = "system.volume"

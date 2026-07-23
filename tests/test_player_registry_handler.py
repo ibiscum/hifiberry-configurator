@@ -13,9 +13,10 @@ import shutil
 import sys
 import tempfile
 import unittest
+from typing import Any, cast
 from unittest.mock import Mock, patch, MagicMock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 # Mock Flask response class
 class MockResponse:  # pylint: disable=too-few-public-methods
@@ -41,6 +42,13 @@ def mock_make_response(data):
     return MockResponse(data, 200)
 
 
+def unwrap_response(result: Any) -> tuple[Any, int]:
+    """Normalize handler return values into (response, status_code)."""
+    if isinstance(result, tuple):
+        return result
+    return result, getattr(result, "status_code", 200)
+
+
 # Patch Flask imports before importing the handler
 def setup_flask_mocks():
     """Setup Flask mocks before importing handler."""
@@ -52,8 +60,7 @@ def setup_flask_mocks():
 
 setup_flask_mocks()
 
-# pylint: disable=wrong-import-position
-from handlers.player_registry_handler import (  # noqa: E402
+from configurator.handlers.player_registry_handler import (  # noqa: E402
     PlayerRegistryHandler,
     sanitize_settings,
     coerce_setting_value,
@@ -305,7 +312,8 @@ class TestPlayerRegistryHandler(unittest.TestCase):
 
     def test_list_players_empty(self):
         """Return empty players list when no descriptors."""
-        response = self.handler.handle_list_players()
+        response, status_code = unwrap_response(self.handler.handle_list_players())
+        self.assertEqual(status_code, 200)
         self.assertEqual(response.json_data["status"], "success")
         self.assertEqual(response.json_data["data"]["players"], [])
 
@@ -357,8 +365,8 @@ class TestPlayerRegistryHandler(unittest.TestCase):
         with open(icon_file, "w", encoding="utf-8") as f:
             f.write(svg_content)
 
-        response = self.handler.handle_player_icon("test")
-        self.assertEqual(response.status_code, 200)
+        response, status_code = unwrap_response(self.handler.handle_player_icon("test"))
+        self.assertEqual(status_code, 200)
         self.assertEqual(response.json_data, svg_content)
 
     def test_set_player_settings_unknown_service(self):
@@ -380,7 +388,9 @@ class TestPlayerRegistryHandler(unittest.TestCase):
                 },
                 f,
             )
-        applied, errors = self.handler.set_player_settings("testsvc", "not a dict")
+        applied, errors = self.handler.set_player_settings(
+            "testsvc", cast(Any, "not a dict")
+        )
         self.assertEqual(applied, [])
         self.assertIn("invalid request body", errors)
 
@@ -496,9 +506,11 @@ class TestPlayerRegistryHandler(unittest.TestCase):
         mock_request.get_json.return_value = {"enabled": False}
         with patch.object(
             sys.modules["flask"], "request", mock_request
-        ), patch("handlers.player_registry_handler.request", mock_request):
-            response = self.handler.handle_set_player_settings("testsvc")
-            self.assertEqual(response.status_code, 200)
+        ), patch("configurator.handlers.player_registry_handler.request", mock_request):
+            response, status_code = unwrap_response(
+                self.handler.handle_set_player_settings("testsvc")
+            )
+            self.assertEqual(status_code, 200)
             self.assertEqual(response.json_data["status"], "success")
 
     def test_handle_set_player_settings_error(self):
@@ -527,7 +539,7 @@ class TestPlayerRegistryHandler(unittest.TestCase):
         mock_request.get_json.return_value = {"unknown": True}
         with patch.object(
             sys.modules["flask"], "request", mock_request
-        ), patch("handlers.player_registry_handler.request", mock_request):
+        ), patch("configurator.handlers.player_registry_handler.request", mock_request):
             response = self.handler.handle_set_player_settings("testsvc")
             self.assertEqual(response[1], 400)
             self.assertEqual(response[0].json_data["status"], "error")

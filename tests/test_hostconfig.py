@@ -17,9 +17,9 @@ from unittest.mock import patch, MagicMock, mock_open
 from io import StringIO
 
 # Add repository root to path for imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.configurator.hostconfig import (
+from configurator.hostconfig import (
     read_hosts_file, write_hosts_file, update_hosts_file,
     get_current_hostname, set_hostname_with_hosts_update,
     validate_hostname, sanitize_hostname, main
@@ -233,8 +233,8 @@ class TestWriteHostsFile(unittest.TestCase):
 class TestUpdateHostsFile(unittest.TestCase):
     """Test updating hosts file"""
 
-    @patch('src.hostconfig.read_hosts_file')
-    @patch('src.hostconfig.write_hosts_file')
+    @patch('configurator.hostconfig.read_hosts_file')
+    @patch('configurator.hostconfig.write_hosts_file')
     def test_update_hosts_file_add_new_hostname(self, mock_write, mock_read):
         """Test adding new hostname to hosts file"""
         mock_read.return_value = [
@@ -247,8 +247,8 @@ class TestUpdateHostsFile(unittest.TestCase):
         self.assertTrue(result)
         mock_write.assert_called_once()
 
-    @patch('src.hostconfig.read_hosts_file')
-    @patch('src.hostconfig.write_hosts_file')
+    @patch('configurator.hostconfig.read_hosts_file')
+    @patch('configurator.hostconfig.write_hosts_file')
     def test_update_hosts_file_remove_old_hostname(self, mock_write, mock_read):
         """Test removing old hostname from hosts file"""
         mock_read.return_value = [
@@ -261,8 +261,8 @@ class TestUpdateHostsFile(unittest.TestCase):
         self.assertTrue(result)
         mock_write.assert_called_once()
 
-    @patch('src.hostconfig.read_hosts_file')
-    @patch('src.hostconfig.write_hosts_file')
+    @patch('configurator.hostconfig.read_hosts_file')
+    @patch('configurator.hostconfig.write_hosts_file')
     def test_update_hosts_file_empty_file(self, mock_write, mock_read):
         """Test updating empty hosts file creates new structure"""
         mock_read.return_value = []
@@ -273,8 +273,8 @@ class TestUpdateHostsFile(unittest.TestCase):
         # Should have written with default structure
         mock_write.assert_called_once()
 
-    @patch('src.hostconfig.read_hosts_file')
-    @patch('src.hostconfig.write_hosts_file')
+    @patch('configurator.hostconfig.read_hosts_file')
+    @patch('configurator.hostconfig.write_hosts_file')
     def test_update_hosts_file_write_failure(self, mock_write, mock_read):
         """Test update fails when write fails"""
         mock_read.return_value = ['127.0.0.1\tlocalhost\n']
@@ -283,8 +283,8 @@ class TestUpdateHostsFile(unittest.TestCase):
         result = update_hosts_file(None, 'newhost')
         self.assertFalse(result)
 
-    @patch('src.hostconfig.read_hosts_file')
-    @patch('src.hostconfig.write_hosts_file')
+    @patch('configurator.hostconfig.read_hosts_file')
+    @patch('configurator.hostconfig.write_hosts_file')
     def test_update_hosts_file_preserves_comments(self, mock_write, mock_read):
         """Test that comments in hosts file are preserved"""
         mock_read.return_value = [
@@ -341,8 +341,8 @@ class TestGetCurrentHostname(unittest.TestCase):
 class TestSetHostnameWithHostsUpdate(unittest.TestCase):
     """Test setting hostname with hosts file update"""
 
-    @patch('src.hostconfig.update_hosts_file')
-    @patch('src.hostconfig.get_current_hostname')
+    @patch('configurator.hostconfig.update_hosts_file')
+    @patch('configurator.hostconfig.get_current_hostname')
     @patch('subprocess.run')
     def test_set_hostname_success(self, mock_run, mock_get, mock_update):
         """Test successful hostname setting"""
@@ -355,7 +355,7 @@ class TestSetHostnameWithHostsUpdate(unittest.TestCase):
         result = set_hostname_with_hosts_update('newhost')
         self.assertTrue(result)
 
-    @patch('src.hostconfig.get_current_hostname')
+    @patch('configurator.hostconfig.get_current_hostname')
     @patch('subprocess.run')
     def test_set_hostname_command_failure(self, mock_run, mock_get):
         """Test hostname setting command failure"""
@@ -368,8 +368,8 @@ class TestSetHostnameWithHostsUpdate(unittest.TestCase):
         result = set_hostname_with_hosts_update('newhost')
         self.assertFalse(result)
 
-    @patch('src.hostconfig.update_hosts_file')
-    @patch('src.hostconfig.get_current_hostname')
+    @patch('configurator.hostconfig.update_hosts_file')
+    @patch('configurator.hostconfig.get_current_hostname')
     @patch('subprocess.run')
     def test_set_hostname_hosts_update_failure_not_critical(self, mock_run, mock_get, mock_update):
         """Test that hosts file update failure doesn't make function fail"""
@@ -383,7 +383,7 @@ class TestSetHostnameWithHostsUpdate(unittest.TestCase):
         # Should still return True because hostname was set
         self.assertTrue(result)
 
-    @patch('src.hostconfig.get_current_hostname', side_effect=Exception('Error'))
+    @patch('configurator.hostconfig.get_current_hostname', side_effect=Exception('Error'))
     def test_set_hostname_exception(self, mock_get):
         """Test hostname setting with exception"""
         result = set_hostname_with_hosts_update('newhost')
@@ -393,7 +393,7 @@ class TestSetHostnameWithHostsUpdate(unittest.TestCase):
 class TestMainCommandLine(unittest.TestCase):
     """Test main command-line interface"""
 
-    @patch('src.hostconfig.get_current_hostname')
+    @patch('configurator.hostconfig.get_current_hostname')
     @patch('sys.argv', ['hostconfig', 'get'])
     def test_main_get_command(self, mock_get):
         """Test main with 'get' command"""
@@ -404,7 +404,7 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertEqual(fake_out.getvalue().strip(), 'myhostname')
 
-    @patch('src.hostconfig.get_current_hostname')
+    @patch('configurator.hostconfig.get_current_hostname')
     @patch('sys.argv', ['hostconfig', 'get'])
     def test_main_get_command_failure(self, mock_get):
         """Test main with 'get' command when it fails"""
@@ -448,7 +448,7 @@ class TestMainCommandLine(unittest.TestCase):
             output = fake_out.getvalue().strip()
             self.assertLessEqual(len(output), 10)
 
-    @patch('src.hostconfig.set_hostname_with_hosts_update')
+    @patch('configurator.hostconfig.set_hostname_with_hosts_update')
     @patch('sys.argv', ['hostconfig', 'set', 'newhost'])
     def test_main_set_command_valid(self, mock_set):
         """Test main with 'set' command for valid hostname"""
@@ -467,7 +467,7 @@ class TestMainCommandLine(unittest.TestCase):
             result = main()
             self.assertEqual(result, 1)
 
-    @patch('src.hostconfig.set_hostname_with_hosts_update')
+    @patch('configurator.hostconfig.set_hostname_with_hosts_update')
     @patch('sys.argv', ['hostconfig', 'set', 'newhost'])
     def test_main_set_command_failure(self, mock_set):
         """Test main with 'set' command when it fails"""
@@ -541,8 +541,8 @@ class TestReturnTypes(unittest.TestCase):
         result = sanitize_hostname('test')
         self.assertIsInstance(result, str)
 
-    @patch('src.hostconfig.read_hosts_file')
-    @patch('src.hostconfig.write_hosts_file')
+    @patch('configurator.hostconfig.read_hosts_file')
+    @patch('configurator.hostconfig.write_hosts_file')
     def test_update_hosts_file_returns_bool(self, mock_write, mock_read):
         """Test that update_hosts_file returns bool"""
         mock_read.return_value = []
@@ -560,8 +560,8 @@ class TestReturnTypes(unittest.TestCase):
         result = get_current_hostname()
         self.assertIsInstance(result, (str, type(None)))
 
-    @patch('src.hostconfig.update_hosts_file')
-    @patch('src.hostconfig.get_current_hostname')
+    @patch('configurator.hostconfig.update_hosts_file')
+    @patch('configurator.hostconfig.get_current_hostname')
     @patch('subprocess.run')
     def test_set_hostname_returns_bool(self, mock_run, mock_get, mock_update):
         """Test that set_hostname_with_hosts_update returns bool"""

@@ -8,7 +8,7 @@ and handling passkey/modal requests for Bluetooth interactions.
 import logging
 from typing import Any, Dict, Optional, Union, cast, TYPE_CHECKING
 
-from ..bluetooth import (
+from configurator.bluetooth import (
     get_bluetooth_settings,
     set_bluetooth_settings,
     get_paired_devices,

@@ -144,7 +144,7 @@ class TestSecureKeyValueOperations(unittest.TestCase):
         self.key_path = os.path.join(self.temp_dir, 'test.key')
 
         # Patch the KEY_FILE path
-        self.key_file_patcher = patch('configdb.KEY_FILE', self.key_path)
+        self.key_file_patcher = patch('configurator.configdb.KEY_FILE', self.key_path)
         self.key_file_patcher.start()
 
         self.db = ConfigDB(self.db_path)
@@ -319,7 +319,7 @@ class TestEncryptionErrorHandling(unittest.TestCase):
         self.db_path = os.path.join(self.temp_dir, 'test.db')
         self.key_path = os.path.join(self.temp_dir, 'test.key')
 
-        self.key_file_patcher = patch('configdb.KEY_FILE', self.key_path)
+        self.key_file_patcher = patch('configurator.configdb.KEY_FILE', self.key_path)
         self.key_file_patcher.start()
 
         self.db = ConfigDB(self.db_path)
@@ -401,7 +401,7 @@ class TestPersistence(unittest.TestCase):
         """Test that encrypted data persists across instances"""
         self.key_path = os.path.join(self.temp_dir, 'test.key')
 
-        with patch('configdb.KEY_FILE', self.key_path):
+        with patch('configurator.configdb.KEY_FILE', self.key_path):
             db1 = ConfigDB(self.db_path)
             db1.set('secure_key', 'secret_value', secure=True)
 
@@ -431,8 +431,8 @@ class TestFlaskHandlers(unittest.TestCase):
     def test_flask_handlers_raise_error_when_flask_unavailable(self):
         """Test that Flask handlers raise error when Flask is not available"""
         # Create a ConfigDB instance with Flask imports disabled
-        with patch('configdb.request', None):
-            with patch('configdb.jsonify', None):
+        with patch('configurator.configdb.request', None):
+            with patch('configurator.configdb.jsonify', None):
                 db = ConfigDB(self.db_path)
 
                 with self.assertRaises(RuntimeError) as context:
@@ -440,8 +440,8 @@ class TestFlaskHandlers(unittest.TestCase):
 
                 self.assertIn('Flask', str(context.exception))
 
-    @patch('configdb.jsonify')
-    @patch('configdb.request')
+    @patch('configurator.configdb.jsonify')
+    @patch('configurator.configdb.request')
     def test_handle_get_config_keys(self, mock_request, mock_jsonify):
         """Test handle_get_config_keys Flask handler"""
         mock_request.args.get.return_value = None
@@ -452,8 +452,8 @@ class TestFlaskHandlers(unittest.TestCase):
         mock_request.args.get.assert_called_once_with('prefix')
         self.assertIsNotNone(result)
 
-    @patch('configdb.jsonify')
-    @patch('configdb.request')
+    @patch('configurator.configdb.jsonify')
+    @patch('configurator.configdb.request')
     def test_handle_get_config_value(self, mock_request, mock_jsonify):
         """Test handle_get_config_value Flask handler"""
         mock_request.args.get.side_effect = lambda key, default=None: 'false' if key == 'secure' else None
@@ -463,8 +463,8 @@ class TestFlaskHandlers(unittest.TestCase):
 
         self.assertIsNotNone(result)
 
-    @patch('configdb.jsonify')
-    @patch('configdb.request')
+    @patch('configurator.configdb.jsonify')
+    @patch('configurator.configdb.request')
     def test_handle_set_config_value(self, mock_request, mock_jsonify):
         """Test handle_set_config_value Flask handler"""
         mock_request.is_json = True
@@ -476,8 +476,8 @@ class TestFlaskHandlers(unittest.TestCase):
 
         self.assertIsNotNone(result)
 
-    @patch('configdb.jsonify')
-    @patch('configdb.request')
+    @patch('configurator.configdb.jsonify')
+    @patch('configurator.configdb.request')
     def test_handle_set_config_value_empty_json_returns_400(self, mock_request, mock_jsonify):
         """Test set handler returns 400 with specific message for empty JSON body."""
         mock_request.is_json = True
@@ -490,8 +490,8 @@ class TestFlaskHandlers(unittest.TestCase):
         self.assertEqual(result[0]['status'], 'error')
         self.assertEqual(result[0]['message'], 'JSON body cannot be empty')
 
-    @patch('configdb.jsonify')
-    @patch('configdb.request')
+    @patch('configurator.configdb.jsonify')
+    @patch('configurator.configdb.request')
     def test_handle_set_config_value_malformed_json_returns_400(self, mock_request, mock_jsonify):
         """Test set handler returns 400 with specific message for malformed JSON body."""
         mock_request.is_json = True
@@ -505,8 +505,8 @@ class TestFlaskHandlers(unittest.TestCase):
         self.assertEqual(result[0]['status'], 'error')
         self.assertEqual(result[0]['message'], 'Malformed JSON body')
 
-    @patch('configdb.jsonify')
-    @patch('configdb.request')
+    @patch('configurator.configdb.jsonify')
+    @patch('configurator.configdb.request')
     def test_handle_delete_config_value(self, mock_request, mock_jsonify):
         """Test handle_delete_config_value Flask handler"""
         mock_jsonify.return_value = {'status': 'success'}

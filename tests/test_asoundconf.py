@@ -262,7 +262,7 @@ class TestMain:
 
         try:
             with patch('sys.argv', ['asoundconf.py', '--default', '--hw', '0', '--channels', '2']):
-                with patch('asoundconf.ALSAConfig') as mock_config:
+                with patch('configurator.asoundconf.ALSAConfig') as mock_config:
                     mock_instance = MagicMock()
                     mock_instance.save.return_value = True
                     mock_config.return_value = mock_instance
@@ -280,7 +280,7 @@ class TestMain:
     def test_main_without_default_flag(self):
         """Test main function without --default flag"""
         with patch('sys.argv', ['asoundconf.py']):
-            with patch('asoundconf.ALSAConfig') as mock_config:
+            with patch('configurator.asoundconf.ALSAConfig') as mock_config:
                 mock_instance = MagicMock()
                 mock_config.return_value = mock_instance
 
@@ -294,7 +294,7 @@ class TestMain:
     def test_main_no_changes_to_save(self):
         """Test main function when no changes to save"""
         with patch('sys.argv', ['asoundconf.py', '--default']):
-            with patch('asoundconf.ALSAConfig') as mock_config:
+            with patch('configurator.asoundconf.ALSAConfig') as mock_config:
                 mock_instance = MagicMock()
                 mock_instance.save.return_value = False
                 mock_config.return_value = mock_instance

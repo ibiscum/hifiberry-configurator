@@ -36,7 +36,7 @@ flask_mock.Response = MockResponse
 flask_mock.request = MagicMock()
 sys.modules['flask'] = flask_mock
 
-from src.configurator.handlers.soundcard_handler import SoundcardHandler  # noqa: E402
+from configurator.handlers.soundcard_handler import SoundcardHandler  # noqa: E402
 
 
 def get_response(result):
@@ -62,7 +62,7 @@ class TestSoundcardHandlerListSoundcards(unittest.TestCase):
         """Create handler"""
         self.handler = SoundcardHandler()
 
-    @patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
+    @patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
         'hifiberry-amp': {'dtoverlay': 'hifiberry-amp'},
         'hifiberry-dac': {'dtoverlay': 'hifiberry-dac'}
     })
@@ -75,7 +75,7 @@ class TestSoundcardHandlerListSoundcards(unittest.TestCase):
         self.assertIn('soundcards', result['data'])
         self.assertEqual(result['data']['count'], 2)
 
-    @patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {})
+    @patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {})
     def test_list_soundcards_empty(self):
         """Test listing when no sound cards are available"""
         result, status = get_response(self.handler.handle_list_soundcards())
@@ -93,9 +93,9 @@ class TestSoundcardHandlerSetDtoverlay(unittest.TestCase):
         """Create handler"""
         self.handler = SoundcardHandler()
 
-    @patch('src.handlers.soundcard_handler.request')
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
-    @patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
+    @patch('configurator.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
         'hifiberry-amp': {'dtoverlay': 'hifiberry-amp'}
     })
     def test_set_dtoverlay_success(self, mock_config_class, mock_request):
@@ -112,7 +112,7 @@ class TestSoundcardHandlerSetDtoverlay(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertIn('dtoverlay', result['data'])
 
-    @patch('src.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.request')
     def test_set_dtoverlay_no_request_body(self, mock_request):
         """Test set_dtoverlay with no JSON request body"""
         mock_request.is_json = False
@@ -121,8 +121,8 @@ class TestSoundcardHandlerSetDtoverlay(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(result['status'], 'error')
 
-    @patch('src.handlers.soundcard_handler.request')
-    @patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {})
+    @patch('configurator.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {})
     def test_set_dtoverlay_invalid_overlay(self, mock_request):
         """Test set_dtoverlay with invalid overlay"""
         mock_request.is_json = True
@@ -132,9 +132,9 @@ class TestSoundcardHandlerSetDtoverlay(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(result['status'], 'error')
 
-    @patch('src.handlers.soundcard_handler.request')
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
-    @patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
+    @patch('configurator.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
         'hifiberry-dac': {'dtoverlay': 'hifiberry-dac'}
     })
     def test_set_dtoverlay_no_changes(self, mock_config_class, mock_request):
@@ -159,7 +159,7 @@ class TestSoundcardHandlerDetectionStatus(unittest.TestCase):
         """Create handler"""
         self.handler = SoundcardHandler()
 
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
     def test_detection_status_enabled(self, mock_config_class):
         """Test getting detection status when enabled"""
         mock_config = MagicMock()
@@ -171,7 +171,7 @@ class TestSoundcardHandlerDetectionStatus(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertTrue(result['data']['detection_enabled'])
 
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
     def test_detection_status_disabled(self, mock_config_class):
         """Test getting detection status when disabled"""
         mock_config = MagicMock()
@@ -191,7 +191,7 @@ class TestSoundcardHandlerEnableDetection(unittest.TestCase):
         """Create handler"""
         self.handler = SoundcardHandler()
 
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
     def test_enable_detection_success(self, mock_config_class):
         """Test successfully enabling detection"""
         mock_config = MagicMock()
@@ -202,7 +202,7 @@ class TestSoundcardHandlerEnableDetection(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertTrue(result['data']['detection_enabled'])
 
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
     def test_enable_detection_already_enabled(self, mock_config_class):
         """Test enabling detection when already enabled"""
         mock_config = MagicMock()
@@ -221,8 +221,8 @@ class TestSoundcardHandlerDisableDetection(unittest.TestCase):
         """Create handler"""
         self.handler = SoundcardHandler()
 
-    @patch('src.handlers.soundcard_handler.request')
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
     def test_disable_detection_with_card_name(self, mock_config_class, mock_request):
         """Test disabling detection and setting a specific card"""
         mock_request.is_json = True
@@ -231,7 +231,7 @@ class TestSoundcardHandlerDisableDetection(unittest.TestCase):
         mock_config = MagicMock()
         mock_config_class.return_value = mock_config
 
-        with patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
+        with patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
             'hifiberry-amp': {'dtoverlay': 'hifiberry-amp'}
         }):
             result, status = get_response(self.handler.handle_disable_detection())
@@ -240,8 +240,8 @@ class TestSoundcardHandlerDisableDetection(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertFalse(result['data']['detection_enabled'])
 
-    @patch('src.handlers.soundcard_handler.request')
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
     def test_disable_detection_without_card_name(self, mock_config_class, mock_request):
         """Test disabling detection without specifying a card"""
         mock_request.is_json = True
@@ -255,21 +255,21 @@ class TestSoundcardHandlerDisableDetection(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertFalse(result['data']['detection_enabled'])
 
-    @patch('src.handlers.soundcard_handler.request')
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
     def test_disable_detection_invalid_card(self, mock_config_class, mock_request):
         """Test disabling detection with invalid card name"""
         mock_request.is_json = True
         mock_request.get_json.return_value = {'card_name': 'invalid-card'}
 
-        with patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {}):
+        with patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {}):
             result, status = get_response(self.handler.handle_disable_detection())
 
         self.assertEqual(status, 400)
         self.assertEqual(result['status'], 'error')
 
-    @patch('src.handlers.soundcard_handler.request')
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
     def test_disable_detection_no_request_body(self, mock_config_class, mock_request):
         """Test disabling detection with no request body"""
         mock_request.is_json = False
@@ -286,8 +286,8 @@ class TestSoundcardHandlerDetectLive(unittest.TestCase):
         """Create handler"""
         self.handler = SoundcardHandler()
 
-    @patch('src.handlers.soundcard_handler.SoundcardDetector')
-    @patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
+    @patch('configurator.handlers.soundcard_handler.SoundcardDetector')
+    @patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
         'hifiberry-amp': {'dtoverlay': 'hifiberry-amp'}
     })
     def test_detect_live_card_found(self, mock_detector_class):
@@ -303,7 +303,7 @@ class TestSoundcardHandlerDetectLive(unittest.TestCase):
         self.assertTrue(result['data']['card_detected'])
         self.assertEqual(result['data']['card_name'], 'hifiberry-amp')
 
-    @patch('src.handlers.soundcard_handler.SoundcardDetector')
+    @patch('configurator.handlers.soundcard_handler.SoundcardDetector')
     def test_detect_live_card_not_found(self, mock_detector_class):
         """Test live detection when no card is found"""
         mock_detector = MagicMock()
@@ -317,7 +317,7 @@ class TestSoundcardHandlerDetectLive(unittest.TestCase):
         self.assertFalse(result['data']['card_detected'])
         self.assertIsNone(result['data']['card_name'])
 
-    @patch('src.handlers.soundcard_handler.SoundcardDetector')
+    @patch('configurator.handlers.soundcard_handler.SoundcardDetector')
     def test_detect_live_card_error(self, mock_detector_class):
         """Test live detection with error"""
         mock_detector_class.side_effect = OSError("Hardware error")
@@ -334,8 +334,8 @@ class TestSoundcardHandlerDetectCurrent(unittest.TestCase):
         """Create handler"""
         self.handler = SoundcardHandler()
 
-    @patch('src.handlers.soundcard_handler.Soundcard')
-    @patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
+    @patch('configurator.handlers.soundcard_handler.Soundcard')
+    @patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
         'hifiberry-dac': {'dtoverlay': 'hifiberry-dac'}
     })
     def test_detect_current_card_found(self, mock_soundcard_class):
@@ -359,7 +359,7 @@ class TestSoundcardHandlerDetectCurrent(unittest.TestCase):
         self.assertTrue(result['data']['card_detected'])
         self.assertEqual(result['data']['card_name'], 'hifiberry-dac')
 
-    @patch('src.handlers.soundcard_handler.Soundcard')
+    @patch('configurator.handlers.soundcard_handler.Soundcard')
     def test_detect_current_card_not_found(self, mock_soundcard_class):
         """Test detecting when no card is currently configured"""
         mock_card = MagicMock()
@@ -372,7 +372,7 @@ class TestSoundcardHandlerDetectCurrent(unittest.TestCase):
         self.assertFalse(result['data']['card_detected'])
         self.assertIsNone(result['data']['card_name'])
 
-    @patch('src.handlers.soundcard_handler.Soundcard')
+    @patch('configurator.handlers.soundcard_handler.Soundcard')
     def test_detect_current_card_error(self, mock_soundcard_class):
         """Test detecting with error"""
         mock_soundcard_class.side_effect = OSError("Hardware error")
@@ -389,9 +389,9 @@ class TestSoundcardHandlerEdgeCases(unittest.TestCase):
         """Create handler"""
         self.handler = SoundcardHandler()
 
-    @patch('src.handlers.soundcard_handler.request')
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
-    @patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
+    @patch('configurator.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
         'hifiberry-amp': {'dtoverlay': 'hifiberry-amp'}
     })
     def test_set_dtoverlay_config_file_error(self, mock_config_class, mock_request):
@@ -405,7 +405,7 @@ class TestSoundcardHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(status, 500)
         self.assertEqual(result['status'], 'error')
 
-    @patch('src.handlers.soundcard_handler.request')
+    @patch('configurator.handlers.soundcard_handler.request')
     def test_set_dtoverlay_missing_dtoverlay_field(self, mock_request):
         """Test set_dtoverlay when dtoverlay field is missing"""
         mock_request.is_json = True
@@ -415,7 +415,7 @@ class TestSoundcardHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(result['status'], 'error')
 
-    @patch('src.handlers.soundcard_handler.ConfigTxt')
+    @patch('configurator.handlers.soundcard_handler.ConfigTxt')
     def test_disable_detection_config_error(self, mock_config_class):
         """Test disable_detection when config operations fail"""
         mock_config_class.side_effect = OSError("File not found")
@@ -424,7 +424,7 @@ class TestSoundcardHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(status, 500)
         self.assertEqual(result['status'], 'error')
 
-    @patch('src.handlers.soundcard_handler.SoundcardDetector')
+    @patch('configurator.handlers.soundcard_handler.SoundcardDetector')
     def test_detect_live_returns_complete_data(self, mock_detector_class):
         """Test that detect_live returns all required fields"""
         mock_detector = MagicMock()
@@ -432,7 +432,7 @@ class TestSoundcardHandlerEdgeCases(unittest.TestCase):
         mock_detector.detected_overlay = 'hifiberry-amp'
         mock_detector_class.return_value = mock_detector
 
-        with patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
+        with patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {
             'hifiberry-amp': {'dtoverlay': 'hifiberry-amp'}
         }):
             result, status = get_response(self.handler.handle_detect_live_soundcard())
@@ -453,13 +453,13 @@ class TestSoundcardHandlerResponseFormats(unittest.TestCase):
 
     def test_all_responses_have_status_field(self):
         """Verify all responses include status field"""
-        with patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {}):
+        with patch('configurator.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {}):
             result, _ = get_response(self.handler.handle_list_soundcards())
             self.assertIn('status', result)
 
     def test_error_responses_have_message(self):
         """Verify error responses include message field"""
-        with patch('src.handlers.soundcard_handler.request') as mock_request:
+        with patch('configurator.handlers.soundcard_handler.request') as mock_request:
             mock_request.is_json = False
             result, status = get_response(self.handler.handle_set_dtoverlay())
             if status >= 400:
@@ -467,7 +467,7 @@ class TestSoundcardHandlerResponseFormats(unittest.TestCase):
 
     def test_success_responses_have_data_field(self):
         """Verify success responses include data field"""
-        with patch('src.handlers.soundcard_handler.SOUND_CARD_DEFINITIONS', {}):
+        with patch('configurator.handlers.soundcard_handler.request') as mock_request:
             result, status = get_response(self.handler.handle_list_soundcards())
             if status < 400:
                 self.assertIn('data', result)

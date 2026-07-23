@@ -36,7 +36,7 @@ flask_mock.request = MagicMock()
 flask_mock.Response = MockResponse
 sys.modules["flask"] = flask_mock
 
-from src.configurator.handlers.filesystem_handler import FilesystemHandler  # pylint: disable=wrong-import-position  # noqa: E402
+from configurator.handlers.filesystem_handler import FilesystemHandler  # pylint: disable=wrong-import-position  # noqa: E402
 
 
 class TestFilesystemHandlerConfigLoading(unittest.TestCase):
@@ -81,7 +81,7 @@ class TestFilesystemHandlerConfigLoading(unittest.TestCase):
             self.assertEqual(handler.allowed_symlink_destinations, [])
             self.assertEqual(handler.allowed_exists_check_destinations, ["/etc"])
 
-    @patch("src.handlers.filesystem_handler.json.load", side_effect=ValueError("bad json"))
+    @patch("configurator.handlers.filesystem_handler.json.load", side_effect=ValueError("bad json"))
     def test_load_config_parse_error_uses_defaults(self, _mock_json_load):
         """Invalid JSON should gracefully fall back to defaults."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp_file:
@@ -103,7 +103,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
         """Create handler with controlled allowlist."""
         self.handler = FilesystemHandler(config_file="/does/not/exist")
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_non_json_request_returns_400(self, mock_request):
         """Requests without JSON content type should fail."""
         mock_request.is_json = False
@@ -114,7 +114,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
         self.assertEqual(status_code, 400)
         self.assertEqual(data["status"], "error")
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_missing_body_returns_400(self, mock_request):
         """Empty JSON body should fail validation."""
         mock_request.is_json = True
@@ -126,7 +126,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
         self.assertEqual(status_code, 400)
         self.assertIn("Missing request body", data["message"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_missing_directory_returns_400(self, mock_request):
         """Missing directory field should be rejected."""
         mock_request.is_json = True
@@ -138,7 +138,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
         self.assertEqual(status_code, 400)
         self.assertIn("Missing required field: directory", data["message"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_no_allowed_destinations_returns_403(self, mock_request):
         """Empty allowlist should deny access."""
         self.handler.allowed_symlink_destinations = []
@@ -151,7 +151,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
         self.assertEqual(status_code, 403)
         self.assertEqual(data["error"], "directory_access_not_allowed")
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_directory_not_allowed_returns_403(self, mock_request):
         """Directories outside allowlist should be denied."""
         self.handler.allowed_symlink_destinations = ["/allowed"]
@@ -164,7 +164,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
         self.assertEqual(status_code, 403)
         self.assertEqual(data["error"], "directory_not_allowed")
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_missing_directory_path_returns_404(self, mock_request):
         """Non-existent directory should return 404."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -179,7 +179,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
             self.assertEqual(status_code, 404)
             self.assertIn("Directory does not exist", data["message"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_path_not_directory_returns_400(self, mock_request):
         """File path instead of directory should return 400."""
         with tempfile.NamedTemporaryFile() as tmp_file:
@@ -193,7 +193,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
             self.assertEqual(status_code, 400)
             self.assertIn("Path is not a directory", data["message"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_permission_denied_returns_403(self, mock_request):
         """PermissionError while listing directory should return 403."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -201,14 +201,14 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
             mock_request.is_json = True
             mock_request.get_json.return_value = {"directory": tmpdir}
 
-            with patch("src.handlers.filesystem_handler.os.listdir", side_effect=PermissionError):
+            with patch("configurator.handlers.filesystem_handler.os.listdir", side_effect=PermissionError):
                 response, status_code = self.handler.handle_list_symlinks()
 
             data = response.get_json()
             self.assertEqual(status_code, 403)
             self.assertIn("Permission denied", data["message"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_list_symlinks_success_and_sorting(self, mock_request):
         """Successful listing should return sorted symlink entries."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -238,7 +238,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
             names = [entry["name"] for entry in data["data"]["symlinks"]]
             self.assertEqual(names, ["a-link", "B-link"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_symlink_read_error_is_reported(self, mock_request):
         """Unreadable symlink target should be reported as an item error."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -257,7 +257,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
                 return original_readlink(path)
 
             with patch(
-                "src.handlers.filesystem_handler.os.readlink",
+                "configurator.handlers.filesystem_handler.os.readlink",
                 side_effect=readlink_side_effect,
             ):
                 response = self.handler.handle_list_symlinks()
@@ -267,7 +267,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
             self.assertEqual(data["data"]["count"], 1)
             self.assertIn("Cannot read symlink target", data["data"]["symlinks"][0]["error"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_symlink_lstat_error_is_reported(self, mock_request):
         """lstat failure should return entry with limited symlink info."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -296,11 +296,11 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
                 return original_islink(path)
 
             with patch(
-                "src.handlers.filesystem_handler.os.path.islink",
+                "configurator.handlers.filesystem_handler.os.path.islink",
                 side_effect=islink_side_effect,
             ):
                 with patch(
-                    "src.handlers.filesystem_handler.os.lstat",
+                    "configurator.handlers.filesystem_handler.os.lstat",
                     side_effect=lstat_side_effect,
                 ):
                     response = self.handler.handle_list_symlinks()
@@ -309,7 +309,7 @@ class TestFilesystemHandlerListSymlinks(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn("Cannot access symlink info", data["data"]["symlinks"][0]["error"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_request_json_parse_error_returns_500(self, mock_request):
         """Unexpected request parsing errors should return 500."""
         self.handler.allowed_symlink_destinations = ["/tmp"]
@@ -331,7 +331,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
         """Create handler with controlled allowlist."""
         self.handler = FilesystemHandler(config_file="/does/not/exist")
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_non_json_request_returns_400(self, mock_request):
         """Requests without JSON content type should fail."""
         mock_request.is_json = False
@@ -340,7 +340,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
         self.assertEqual(status_code, 400)
         self.assertEqual(response.get_json()["status"], "error")
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_missing_body_returns_400(self, mock_request):
         """Empty body should return validation error."""
         mock_request.is_json = True
@@ -350,7 +350,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
         self.assertEqual(status_code, 400)
         self.assertIn("Missing request body", response.get_json()["message"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_missing_path_returns_400(self, mock_request):
         """Missing path field should return validation error."""
         mock_request.is_json = True
@@ -360,7 +360,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
         self.assertEqual(status_code, 400)
         self.assertIn("Missing required field: path", response.get_json()["message"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_no_allowed_destinations_returns_403(self, mock_request):
         """Empty file-exists allowlist should deny access."""
         self.handler.allowed_exists_check_destinations = []
@@ -371,7 +371,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
         self.assertEqual(status_code, 403)
         self.assertEqual(response.get_json()["error"], "file_access_not_allowed")
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_path_not_allowed_returns_403(self, mock_request):
         """Paths outside allowlist should be rejected."""
         self.handler.allowed_exists_check_destinations = ["/allowed"]
@@ -382,7 +382,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
         self.assertEqual(status_code, 403)
         self.assertEqual(response.get_json()["error"], "path_not_allowed")
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_path_exists_returns_success_true(self, mock_request):
         """Existing path should return success with exists=true."""
         self.handler.allowed_exists_check_destinations = ["/tmp"]
@@ -398,7 +398,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
             self.assertEqual(data["status"], "success")
             self.assertTrue(data["data"]["exists"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_path_missing_returns_success_false(self, mock_request):
         """Missing path should return success with exists=false."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -413,7 +413,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertFalse(data["data"]["exists"])
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_os_error_returns_500(self, mock_request):
         """Unexpected exception should return 500 response."""
         self.handler.allowed_exists_check_destinations = ["/tmp"]
@@ -421,7 +421,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
         mock_request.get_json.return_value = {"path": "/tmp/file"}
 
         with patch(
-            "src.handlers.filesystem_handler.os.path.exists",
+            "configurator.handlers.filesystem_handler.os.path.exists",
             side_effect=RuntimeError("boom"),
         ):
             response, status_code = self.handler.handle_file_exists()
@@ -431,7 +431,7 @@ class TestFilesystemHandlerFileExists(unittest.TestCase):
         self.assertEqual(data["status"], "error")
         self.assertEqual(data["error"], "boom")
 
-    @patch("src.handlers.filesystem_handler.request")
+    @patch("configurator.handlers.filesystem_handler.request")
     def test_request_json_parse_error_returns_500(self, mock_request):
         """Unexpected request parsing errors should return 500."""
         self.handler.allowed_exists_check_destinations = ["/tmp"]

@@ -6,6 +6,7 @@ checks, service listings, and operation execution with permission-based access c
 """
 
 import unittest
+from typing import Any, cast
 from unittest.mock import patch, MagicMock
 import sys
 
@@ -35,7 +36,7 @@ flask_mock.Response = MockResponse
 flask_mock.request = MagicMock()
 sys.modules['flask'] = flask_mock
 
-from src.configurator.handlers.systemd_handler import SystemdHandler  # noqa: E402
+from configurator.handlers.systemd_handler import SystemdHandler  # noqa: E402
 
 
 def get_response(result):
@@ -61,16 +62,17 @@ class TestSystemdHandlerOperation(unittest.TestCase):
 
     def setUp(self):
         """Create handler with mocked service manager"""
-        with patch('src.handlers.systemd_handler.SystemdServiceManager'):
+        with patch('configurator.handlers.systemd_handler.SystemdServiceManager'):
             self.handler = SystemdHandler()
             self.handler.service_manager = MagicMock()
+            self.service_manager_mock = cast(Any, self.handler.service_manager)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_start_success(self, mock_config):
         """Test successful start operation"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.start.return_value = (True, 'Service started')
+        self.service_manager_mock.start.return_value = (True, 'Service started')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'start')
@@ -81,12 +83,12 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(result['data']['operation'], 'start')
         self.assertEqual(result['data']['service'], 'test-service')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_stop_success(self, mock_config):
         """Test successful stop operation"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.stop.return_value = (True, 'Service stopped')
+        self.service_manager_mock.stop.return_value = (True, 'Service stopped')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'stop')
@@ -96,12 +98,12 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['operation'], 'stop')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_restart_success(self, mock_config):
         """Test successful restart operation"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.restart.return_value = (True, 'Service restarted')
+        self.service_manager_mock.restart.return_value = (True, 'Service restarted')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'restart')
@@ -111,12 +113,12 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['operation'], 'restart')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_enable_success(self, mock_config):
         """Test successful enable operation"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.enable.return_value = (True, 'Service enabled')
+        self.service_manager_mock.enable.return_value = (True, 'Service enabled')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'enable')
@@ -125,12 +127,12 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['status'], 'success')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_disable_success(self, mock_config):
         """Test successful disable operation"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.disable.return_value = (True, 'Service disabled')
+        self.service_manager_mock.disable.return_value = (True, 'Service disabled')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'disable')
@@ -139,12 +141,12 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['status'], 'success')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_enable_now_success(self, mock_config):
         """Test successful enable-now operation"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.enable_now.return_value = (True, 'Service enabled and started')
+        self.service_manager_mock.enable_now.return_value = (True, 'Service enabled and started')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'enable-now')
@@ -153,12 +155,12 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['status'], 'success')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_disable_now_success(self, mock_config):
         """Test successful disable-now operation"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.disable_now.return_value = (True, 'Service disabled and stopped')
+        self.service_manager_mock.disable_now.return_value = (True, 'Service disabled and stopped')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'disable-now')
@@ -167,7 +169,7 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['status'], 'success')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_invalid(self, mock_config):
         """Test invalid operation"""
         mock_config.return_value = {'test-service': 'all'}
@@ -180,7 +182,7 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('Invalid operation', result['message'])
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_service_not_found(self, mock_config):
         """Test operation on non-existent service"""
         mock_config.return_value = {'test-service': 'all'}
@@ -194,7 +196,7 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('does not exist', result['message'])
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_permission_denied(self, mock_config):
         """Test operation not allowed for service permission level"""
         mock_config.return_value = {'test-service': 'status'}
@@ -208,12 +210,12 @@ class TestSystemdHandlerOperation(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('not allowed', result['message'])
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_failure(self, mock_config):
         """Test failed operation"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.start.return_value = (False, 'Permission denied')
+        self.service_manager_mock.start.return_value = (False, 'Permission denied')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'start')
@@ -229,18 +231,19 @@ class TestSystemdHandlerStatus(unittest.TestCase):
 
     def setUp(self):
         """Create handler with mocked service manager"""
-        with patch('src.handlers.systemd_handler.SystemdServiceManager'):
+        with patch('configurator.handlers.systemd_handler.SystemdServiceManager'):
             self.handler = SystemdHandler()
             self.handler.service_manager = MagicMock()
+            self.service_manager_mock = cast(Any, self.handler.service_manager)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_status_active_enabled(self, mock_config):
         """Test status of active and enabled service"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = True
-        self.handler.service_manager.status.return_value = (
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = True
+        self.service_manager_mock.status.return_value = (
             True,
             {'status_output': 'Service is running', 'environment': 'system'}
         )
@@ -255,14 +258,14 @@ class TestSystemdHandlerStatus(unittest.TestCase):
         self.assertEqual(result['data']['enabled'], 'enabled')
         self.assertEqual(result['data']['service'], 'test-service')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_status_inactive_disabled(self, mock_config):
         """Test status of inactive and disabled service"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = False
-        self.handler.service_manager.is_enabled.return_value = False
-        self.handler.service_manager.status.return_value = (
+        self.service_manager_mock.is_active.return_value = False
+        self.service_manager_mock.is_enabled.return_value = False
+        self.service_manager_mock.status.return_value = (
             True,
             {'status_output': 'Service is not running', 'environment': 'system'}
         )
@@ -275,7 +278,7 @@ class TestSystemdHandlerStatus(unittest.TestCase):
         self.assertEqual(result['data']['active'], 'inactive')
         self.assertEqual(result['data']['enabled'], 'disabled')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_status_service_not_found(self, mock_config):
         """Test status of non-existent service"""
         mock_config.return_value = {'test-service': 'all'}
@@ -289,14 +292,14 @@ class TestSystemdHandlerStatus(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('does not exist', result['message'])
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_status_includes_allowed_operations(self, mock_config):
         """Test status includes allowed operations based on permissions"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = True
-        self.handler.service_manager.status.return_value = (
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = True
+        self.service_manager_mock.status.return_value = (
             True,
             {'status_output': 'Running', 'environment': 'system'}
         )
@@ -315,18 +318,19 @@ class TestSystemdHandlerServiceExists(unittest.TestCase):
 
     def setUp(self):
         """Create handler with mocked service manager"""
-        with patch('src.handlers.systemd_handler.SystemdServiceManager'):
+        with patch('configurator.handlers.systemd_handler.SystemdServiceManager'):
             self.handler = SystemdHandler()
             self.handler.service_manager = MagicMock()
+            self.service_manager_mock = cast(Any, self.handler.service_manager)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_service_exists_yes(self, mock_config):
         """Test check for existing service"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = True
-        self.handler.service_manager.status.return_value = (
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = True
+        self.service_manager_mock.status.return_value = (
             True,
             {'environment': 'system'}
         )
@@ -340,7 +344,7 @@ class TestSystemdHandlerServiceExists(unittest.TestCase):
         self.assertTrue(result['data']['exists'])
         self.assertEqual(result['data']['service'], 'test-service')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_service_exists_no(self, mock_config):
         """Test check for non-existent service"""
         mock_config.return_value = {}
@@ -354,14 +358,14 @@ class TestSystemdHandlerServiceExists(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertFalse(result['data']['exists'])
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_service_exists_includes_basic_info(self, mock_config):
         """Test service exists response includes basic info when service is found"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = False
-        self.handler.service_manager.status.return_value = (
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = False
+        self.service_manager_mock.status.return_value = (
             True,
             {'environment': 'system'}
         )
@@ -382,11 +386,12 @@ class TestSystemdHandlerListServices(unittest.TestCase):
 
     def setUp(self):
         """Create handler with mocked service manager"""
-        with patch('src.handlers.systemd_handler.SystemdServiceManager'):
+        with patch('configurator.handlers.systemd_handler.SystemdServiceManager'):
             self.handler = SystemdHandler()
             self.handler.service_manager = MagicMock()
+            self.service_manager_mock = cast(Any, self.handler.service_manager)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_list_services_empty(self, mock_config):
         """Test list with no configured services"""
         mock_config.return_value = {}
@@ -400,7 +405,7 @@ class TestSystemdHandlerListServices(unittest.TestCase):
         self.assertEqual(result['data']['count'], 0)
         self.assertEqual(len(result['data']['services']), 0)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_list_services_multiple(self, mock_config):
         """Test list with multiple services"""
         mock_config.return_value = {
@@ -408,9 +413,9 @@ class TestSystemdHandlerListServices(unittest.TestCase):
             'service2': 'status'
         }
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = True
-        self.handler.service_manager.status.return_value = (
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = True
+        self.service_manager_mock.status.return_value = (
             True,
             {'environment': 'system'}
         )
@@ -424,7 +429,7 @@ class TestSystemdHandlerListServices(unittest.TestCase):
         self.assertEqual(result['data']['count'], 2)
         self.assertEqual(len(result['data']['services']), 2)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_list_services_nonexistent(self, mock_config):
         """Test list with non-existent service included"""
         mock_config.return_value = {'test-service': 'all'}
@@ -439,7 +444,7 @@ class TestSystemdHandlerListServices(unittest.TestCase):
         self.assertFalse(result['data']['services'][0]['exists'])
         self.assertEqual(result['data']['services'][0]['active'], 'not-available')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_list_services_permission_levels(self, mock_config):
         """Test list includes correct permission levels and operations"""
         mock_config.return_value = {
@@ -447,9 +452,9 @@ class TestSystemdHandlerListServices(unittest.TestCase):
             'status-only': 'status'
         }
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = True
-        self.handler.service_manager.status.return_value = (
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = True
+        self.service_manager_mock.status.return_value = (
             True,
             {'environment': 'system'}
         )
@@ -473,11 +478,12 @@ class TestSystemdHandlerPermissions(unittest.TestCase):
 
     def setUp(self):
         """Create handler with mocked service manager"""
-        with patch('src.handlers.systemd_handler.SystemdServiceManager'):
+        with patch('configurator.handlers.systemd_handler.SystemdServiceManager'):
             self.handler = SystemdHandler()
             self.handler.service_manager = MagicMock()
+            self.service_manager_mock = cast(Any, self.handler.service_manager)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_permission_all_allows_all_operations(self, mock_config):
         """Test 'all' permission level allows all operations"""
         mock_config.return_value = {'test-service': 'all'}
@@ -492,7 +498,7 @@ class TestSystemdHandlerPermissions(unittest.TestCase):
         self.assertIn('disable', perms)
         self.assertIn('status', perms)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_permission_status_restricts_operations(self, mock_config):
         """Test 'status' permission level only allows status"""
         mock_config.return_value = {'test-service': 'status'}
@@ -504,7 +510,7 @@ class TestSystemdHandlerPermissions(unittest.TestCase):
         self.assertNotIn('start', perms)
         self.assertNotIn('stop', perms)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_permission_invalid_defaults_to_status(self, mock_config):
         """Test invalid permission level defaults to status"""
         mock_config.return_value = {'test-service': 'invalid'}
@@ -513,7 +519,7 @@ class TestSystemdHandlerPermissions(unittest.TestCase):
 
         self.assertEqual(perms, ['status'])
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_is_operation_allowed_yes(self, mock_config):
         """Test operation allowed check returns true"""
         mock_config.return_value = {'test-service': 'all'}
@@ -522,7 +528,7 @@ class TestSystemdHandlerPermissions(unittest.TestCase):
 
         self.assertTrue(allowed)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_is_operation_allowed_no(self, mock_config):
         """Test operation allowed check returns false"""
         mock_config.return_value = {'test-service': 'status'}
@@ -537,11 +543,12 @@ class TestSystemdHandlerEdgeCases(unittest.TestCase):
 
     def setUp(self):
         """Create handler with mocked service manager"""
-        with patch('src.handlers.systemd_handler.SystemdServiceManager'):
+        with patch('configurator.handlers.systemd_handler.SystemdServiceManager'):
             self.handler = SystemdHandler()
             self.handler.service_manager = MagicMock()
+            self.service_manager_mock = cast(Any, self.handler.service_manager)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_service_exists_manager_unavailable(self, mock_config):
         """Test service exists check when service manager is None"""
         mock_config.return_value = {}
@@ -551,7 +558,7 @@ class TestSystemdHandlerEdgeCases(unittest.TestCase):
 
         self.assertFalse(exists)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_execute_systemctl_unknown_operation(self, mock_config):
         """Test execute with unknown operation"""
         returncode, stdout, stderr = self.handler._execute_systemctl('unknown', 'test-service')
@@ -559,14 +566,14 @@ class TestSystemdHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(returncode, 1)
         self.assertIn('Unknown operation', stderr)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_status_with_empty_status_data(self, mock_config):
         """Test status when service manager returns empty data"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = True
-        self.handler.service_manager.status.return_value = (True, {})
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = True
+        self.service_manager_mock.status.return_value = (True, {})
 
         result, status = get_response(
             self.handler.handle_systemd_status('test-service')
@@ -575,14 +582,14 @@ class TestSystemdHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['environment'], 'unknown')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_status_with_string_status_data(self, mock_config):
         """Test status when service manager returns string data"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = True
-        self.handler.service_manager.status.return_value = (True, 'some output string')
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = True
+        self.service_manager_mock.status.return_value = (True, 'some output string')
 
         result, status = get_response(
             self.handler.handle_systemd_status('test-service')
@@ -597,16 +604,17 @@ class TestSystemdHandlerResponseFormat(unittest.TestCase):
 
     def setUp(self):
         """Create handler with mocked service manager"""
-        with patch('src.handlers.systemd_handler.SystemdServiceManager'):
+        with patch('configurator.handlers.systemd_handler.SystemdServiceManager'):
             self.handler = SystemdHandler()
             self.handler.service_manager = MagicMock()
+            self.service_manager_mock = cast(Any, self.handler.service_manager)
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_success_response_format(self, mock_config):
         """Verify operation success response has required fields"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.start.return_value = (True, 'Started')
+        self.service_manager_mock.start.return_value = (True, 'Started')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'start')
@@ -620,12 +628,12 @@ class TestSystemdHandlerResponseFormat(unittest.TestCase):
         self.assertIn('output', result['data'])
         self.assertIn('returncode', result['data'])
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_operation_error_response_format(self, mock_config):
         """Verify operation error response has required fields"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.start.return_value = (False, 'Failed')
+        self.service_manager_mock.start.return_value = (False, 'Failed')
 
         result, status = get_response(
             self.handler.handle_systemd_operation('test-service', 'start')
@@ -636,14 +644,14 @@ class TestSystemdHandlerResponseFormat(unittest.TestCase):
         self.assertIn('data', result)
         self.assertEqual(result['status'], 'error')
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_status_response_format(self, mock_config):
         """Verify status response has required fields"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = True
-        self.handler.service_manager.status.return_value = (
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = True
+        self.service_manager_mock.status.return_value = (
             True,
             {'status_output': 'Running', 'environment': 'system'}
         )
@@ -659,14 +667,14 @@ class TestSystemdHandlerResponseFormat(unittest.TestCase):
         self.assertIn('enabled', result['data'])
         self.assertIn('allowed_operations', result['data'])
 
-    @patch('src.handlers.systemd_handler.get_config_section')
+    @patch('configurator.handlers.systemd_handler.get_config_section')
     def test_list_services_response_format(self, mock_config):
         """Verify list services response has required fields"""
         mock_config.return_value = {'test-service': 'all'}
         self.handler._service_exists = MagicMock(return_value=True)
-        self.handler.service_manager.is_active.return_value = True
-        self.handler.service_manager.is_enabled.return_value = True
-        self.handler.service_manager.status.return_value = (
+        self.service_manager_mock.is_active.return_value = True
+        self.service_manager_mock.is_enabled.return_value = True
+        self.service_manager_mock.status.return_value = (
             True,
             {'environment': 'system'}
         )

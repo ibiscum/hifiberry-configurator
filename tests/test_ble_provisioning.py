@@ -322,7 +322,7 @@ class TestBLEProvisioningServer:
 class TestNetworkConnectivity:
     """Test cases for network connectivity check"""
 
-    @patch("src.ble_provisioning.network.list_physical_interfaces")
+    @patch("configurator.ble_provisioning.network.list_physical_interfaces")
     def test_has_network_connectivity_true(self, mock_interfaces):
         """Test network connectivity detection when connected"""
         mock_interfaces.return_value = [
@@ -334,7 +334,7 @@ class TestNetworkConnectivity:
 
         assert result is True
 
-    @patch("src.ble_provisioning.network.list_physical_interfaces")
+    @patch("configurator.ble_provisioning.network.list_physical_interfaces")
     def test_has_network_connectivity_false(self, mock_interfaces):
         """Test network connectivity detection when not connected"""
         mock_interfaces.return_value = [
@@ -346,7 +346,7 @@ class TestNetworkConnectivity:
 
         assert result is False
 
-    @patch("src.ble_provisioning.network.list_physical_interfaces")
+    @patch("configurator.ble_provisioning.network.list_physical_interfaces")
     def test_has_network_connectivity_error(self, mock_interfaces):
         """Test network connectivity detection with error"""
         mock_interfaces.side_effect = IOError("Error reading interfaces")
@@ -355,7 +355,7 @@ class TestNetworkConnectivity:
 
         assert result is False
 
-    @patch("src.ble_provisioning.network.list_physical_interfaces")
+    @patch("configurator.ble_provisioning.network.list_physical_interfaces")
     def test_has_network_connectivity_empty_list(self, mock_interfaces):
         """Test network connectivity detection with no interfaces"""
         mock_interfaces.return_value = []
@@ -368,9 +368,9 @@ class TestNetworkConnectivity:
 class TestSetupLogging:
     """Test cases for setup_logging function"""
 
-    @patch("src.ble_provisioning.logging.getLogger")
-    @patch("src.ble_provisioning.logging.StreamHandler")
-    @patch("src.ble_provisioning.logging.Formatter")
+    @patch("configurator.ble_provisioning.logging.getLogger")
+    @patch("configurator.ble_provisioning.logging.StreamHandler")
+    @patch("configurator.ble_provisioning.logging.Formatter")
     def test_setup_logging_normal(self, mock_formatter, mock_handler, mock_logger):
         """Test logging setup with normal verbosity"""
         mock_root_logger = MagicMock()
@@ -380,9 +380,9 @@ class TestSetupLogging:
 
         mock_root_logger.setLevel.assert_called()
 
-    @patch("src.ble_provisioning.logging.getLogger")
-    @patch("src.ble_provisioning.logging.StreamHandler")
-    @patch("src.ble_provisioning.logging.Formatter")
+    @patch("configurator.ble_provisioning.logging.getLogger")
+    @patch("configurator.ble_provisioning.logging.StreamHandler")
+    @patch("configurator.ble_provisioning.logging.Formatter")
     def test_setup_logging_verbose(self, mock_formatter, mock_handler, mock_logger):
         """Test logging setup with verbose flag"""
         mock_root_logger = MagicMock()
@@ -396,7 +396,7 @@ class TestSetupLogging:
 class TestMainCLI:
     """Test cases for main CLI function"""
 
-    @patch("src.ble_provisioning.has_network_connectivity")
+    @patch("configurator.ble_provisioning.has_network_connectivity")
     @patch("sys.exit")
     def test_main_check_network_no_connectivity(self, mock_exit, mock_has_conn):
         """Test check-network when no network connectivity"""
@@ -407,7 +407,7 @@ class TestMainCLI:
 
         mock_exit.assert_called_with(0)
 
-    @patch("src.ble_provisioning.has_network_connectivity")
+    @patch("configurator.ble_provisioning.has_network_connectivity")
     @patch("sys.exit")
     def test_main_check_network_with_connectivity(self, mock_exit, mock_has_conn):
         """Test check-network when network is connected"""
@@ -418,7 +418,7 @@ class TestMainCLI:
 
         mock_exit.assert_called_with(1)
 
-    @patch("src.ble_provisioning.subprocess.run")
+    @patch("configurator.ble_provisioning.subprocess.run")
     @patch("sys.exit")
     def test_main_stop_service(self, mock_exit, mock_run):
         """Test stop action"""
@@ -437,11 +437,11 @@ class TestMainCLI:
         with pytest.raises(SystemExit):
             main()
 
-    @patch("src.ble_provisioning.setup_logging")
+    @patch("configurator.ble_provisioning.setup_logging")
     def test_main_verbose_flag(self, mock_setup_logging):
         """Test that verbose flag is processed"""
         with patch("sys.argv", ["ble-provisioning", "--check-network", "-v"]):
-            with patch("src.ble_provisioning.has_network_connectivity", return_value=False):
+            with patch("configurator.ble_provisioning.has_network_connectivity", return_value=False):
                 with patch("sys.exit"):
                     main()
 

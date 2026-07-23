@@ -13,7 +13,7 @@ Tests cover:
 
 from unittest.mock import patch, MagicMock
 
-from src.configurator.soundcard import (
+from configurator.soundcard import (
     Soundcard,
     SOUND_CARD_DEFINITIONS,
     UNKNOWN_CARD_NAME,
@@ -65,7 +65,7 @@ class TestSoundcardInitialization:
         card = Soundcard(name="MiniAmp", card_type=None)
         assert card.card_type == []
 
-    @patch("src.soundcard.Soundcard._detect_card")
+    @patch("configurator.soundcard.Soundcard._detect_card")
     def test_init_with_detection_no_name(self, mock_detect):
         """Test initialization with detection when no name provided."""
         mock_detect.return_value = {
@@ -83,7 +83,7 @@ class TestSoundcardInitialization:
         assert card.volume_control == "Digital"
         mock_detect.assert_called_once_with(no_eeprom=False)
 
-    @patch("src.soundcard.Soundcard._detect_card")
+    @patch("configurator.soundcard.Soundcard._detect_card")
     def test_init_detection_returns_none(self, mock_detect):
         """Test initialization when detection returns None."""
         mock_detect.return_value = None
@@ -92,7 +92,7 @@ class TestSoundcardInitialization:
         assert card.volume_control is None
         assert card.output_channels == 2
 
-    @patch("src.soundcard.Soundcard._detect_card_aplay_priority")
+    @patch("configurator.soundcard.Soundcard._detect_card_aplay_priority")
     def test_init_prioritize_aplay(self, mock_aplay):
         """Test initialization with aplay prioritization."""
         mock_aplay.return_value = {
@@ -131,7 +131,7 @@ class TestSoundcardStringRepresentation:
 class TestGetHardwareIndex:
     """Test hardware index detection methods."""
 
-    @patch("src.soundcard.Soundcard._get_hardware_index_fallback")
+    @patch("configurator.soundcard.Soundcard._get_hardware_index_fallback")
     def test_get_hardware_index_no_alsaaudio(self, mock_fallback):
         """Test hardware index when alsaaudio is not available."""
         mock_fallback.return_value = 0
@@ -140,7 +140,7 @@ class TestGetHardwareIndex:
         # Should call fallback if alsaaudio not available
         assert result is not None or result is None  # Can be either
 
-    @patch("src.soundcard.Soundcard._get_hardware_index_fallback")
+    @patch("configurator.soundcard.Soundcard._get_hardware_index_fallback")
     def test_get_hardware_index_fallback_called(self, mock_fallback):
         """Test that fallback is used when primary methods fail."""
         mock_fallback.return_value = 2
@@ -187,8 +187,8 @@ class TestGetMixerControlName:
 class TestCheckMixerControlExists:
     """Test mixer control existence checking - subprocess path only."""
 
-    @patch("src.soundcard.subprocess.run")
-    @patch("src.soundcard.Soundcard.get_hardware_index")
+    @patch("configurator.soundcard.subprocess.run")
+    @patch("configurator.soundcard.Soundcard.get_hardware_index")
     def test_check_mixer_control_exists_found(self, mock_hw_index, mock_run):
         """Test detecting existing mixer control via amixer subprocess."""
         mock_hw_index.return_value = 0
@@ -199,8 +199,8 @@ class TestCheckMixerControlExists:
             exists = card._check_mixer_control_exists("Digital")
             assert exists is True
 
-    @patch("src.soundcard.subprocess.run")
-    @patch("src.soundcard.Soundcard.get_hardware_index")
+    @patch("configurator.soundcard.subprocess.run")
+    @patch("configurator.soundcard.Soundcard.get_hardware_index")
     def test_check_mixer_control_exists_not_found(self, mock_hw_index, mock_run):
         """Test when mixer control doesn't exist."""
         mock_hw_index.return_value = 0
@@ -210,8 +210,8 @@ class TestCheckMixerControlExists:
             exists = card._check_mixer_control_exists("Digital")
             assert exists is False
 
-    @patch("src.soundcard.subprocess.run")
-    @patch("src.soundcard.Soundcard.get_hardware_index")
+    @patch("configurator.soundcard.subprocess.run")
+    @patch("configurator.soundcard.Soundcard.get_hardware_index")
     def test_check_mixer_control_no_hardware_index(self, mock_hw_index, mock_run):
         """Test when hardware index is not available."""
         mock_hw_index.return_value = None
@@ -223,7 +223,7 @@ class TestCheckMixerControlExists:
 class TestCreateDummyAlsaControl:
     """Test ALSA dummy mixer control creation."""
 
-    @patch("src.soundcard.Soundcard._check_mixer_control_exists")
+    @patch("configurator.soundcard.Soundcard._check_mixer_control_exists")
     def test_create_dummy_alsa_control_already_exists(self, mock_check):
         """Test when control already exists."""
         mock_check.return_value = True
@@ -232,9 +232,9 @@ class TestCreateDummyAlsaControl:
         assert result is True
         mock_check.assert_called_once_with("TestControl")
 
-    @patch("src.soundcard.subprocess.run")
-    @patch("src.soundcard.Soundcard._check_mixer_control_exists")
-    @patch("src.soundcard.tempfile.NamedTemporaryFile")
+    @patch("configurator.soundcard.subprocess.run")
+    @patch("configurator.soundcard.Soundcard._check_mixer_control_exists")
+    @patch("configurator.soundcard.tempfile.NamedTemporaryFile")
     def test_create_dummy_alsa_control_success(self, mock_temp, mock_check, mock_run):
         """Test successful creation of dummy ALSA control."""
         mock_file = MagicMock()
@@ -249,9 +249,9 @@ class TestCreateDummyAlsaControl:
         mock_run.assert_called_once()
         assert "/usr/sbin/alsactl" in mock_run.call_args[0][0]
 
-    @patch("src.soundcard.subprocess.run")
-    @patch("src.soundcard.Soundcard._check_mixer_control_exists")
-    @patch("src.soundcard.tempfile.NamedTemporaryFile")
+    @patch("configurator.soundcard.subprocess.run")
+    @patch("configurator.soundcard.Soundcard._check_mixer_control_exists")
+    @patch("configurator.soundcard.tempfile.NamedTemporaryFile")
     def test_create_dummy_alsa_control_failure(self, mock_temp, mock_check, mock_run):
         """Test when ALSA control creation fails."""
         mock_file = MagicMock()
@@ -265,9 +265,9 @@ class TestCreateDummyAlsaControl:
         result = card.create_dummy_alsa_control("TestControl")
         assert result is False
 
-    @patch("src.soundcard.subprocess.run")
-    @patch("src.soundcard.Soundcard._check_mixer_control_exists")
-    @patch("src.soundcard.tempfile.NamedTemporaryFile")
+    @patch("configurator.soundcard.subprocess.run")
+    @patch("configurator.soundcard.Soundcard._check_mixer_control_exists")
+    @patch("configurator.soundcard.tempfile.NamedTemporaryFile")
     def test_create_dummy_alsa_control_exception_handling(self, mock_temp, mock_check, mock_run):
         """Test exception handling in ALSA control creation."""
         mock_temp.return_value.__enter__.return_value = MagicMock(name="/tmp/test.state")
@@ -283,7 +283,7 @@ class TestCreateDummyAlsaControl:
 class TestGetOrCreateVolumeControl:
     """Test volume control retrieval or creation."""
 
-    @patch("src.soundcard.Soundcard._check_mixer_control_exists")
+    @patch("configurator.soundcard.Soundcard._check_mixer_control_exists")
     def test_get_or_create_volume_control_exists(self, mock_check):
         """Test when volume control already exists."""
         mock_check.return_value = True
@@ -291,7 +291,7 @@ class TestGetOrCreateVolumeControl:
         result = card.get_or_create_volume_control()
         assert result == "Digital"
 
-    @patch("src.soundcard.Soundcard.create_dummy_alsa_control")
+    @patch("configurator.soundcard.Soundcard.create_dummy_alsa_control")
     def test_get_or_create_volume_control_none_available(self, mock_create):
         """Test when no volume control available, creates Softvol by default."""
         mock_create.return_value = True
@@ -299,7 +299,7 @@ class TestGetOrCreateVolumeControl:
         result = card.get_or_create_volume_control()
         assert result == "Softvol"
 
-    @patch("src.soundcard.Soundcard.create_dummy_alsa_control")
+    @patch("configurator.soundcard.Soundcard.create_dummy_alsa_control")
     def test_get_or_create_volume_control_create_preferred(self, mock_create):
         """Test creating preferred volume control."""
         mock_create.return_value = True
@@ -308,7 +308,7 @@ class TestGetOrCreateVolumeControl:
         assert result == "CustomVolume"
         mock_create.assert_called_once_with("CustomVolume")
 
-    @patch("src.soundcard.Soundcard.create_dummy_alsa_control")
+    @patch("configurator.soundcard.Soundcard.create_dummy_alsa_control")
     def test_get_or_create_volume_control_creation_fails(self, mock_create):
         """Test when control creation fails."""
         mock_create.return_value = False
@@ -369,7 +369,7 @@ class TestEdgeCases:
         card = Soundcard(name="DAC+ Pro", card_type=[])
         assert card.card_type == []
 
-    @patch("src.soundcard.Soundcard._detect_card")
+    @patch("configurator.soundcard.Soundcard._detect_card")
     def test_init_partial_detection_result(self, mock_detect):
         """Test handling partial detection result with missing keys."""
         mock_detect.return_value = {"name": "TestCard"}  # Minimal result

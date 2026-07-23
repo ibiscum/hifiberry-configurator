@@ -11,10 +11,10 @@ try:
     ARGCOMPLETE_AVAILABLE = True
 except ImportError:
     ARGCOMPLETE_AVAILABLE = False
-from src.configurator.configtxt import ConfigTxt
-from src.configurator.hattools import get_hat_info  # Import the get_hat_info module
-from src.configurator.dsptoolkit import detect_dsp
-from src.configurator.configdb import ConfigDB
+from configurator.configtxt import ConfigTxt
+from configurator.hattools import get_hat_info  # Import the get_hat_info module
+from configurator.dsptoolkit import detect_dsp
+from configurator.configdb import ConfigDB
 
 # Constants
 HIFIBERRY_CARD_COMMENT_PREFIX = "# HiFiBerry card:"

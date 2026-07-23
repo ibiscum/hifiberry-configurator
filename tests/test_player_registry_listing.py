@@ -2,8 +2,8 @@ import json
 import os
 from typing import Any
 from pathlib import Path
-from src.configurator.handlers.player_registry_handler import PlayerRegistryHandler
-from src.configurator.configdb import ConfigDB
+from configurator.handlers.player_registry_handler import PlayerRegistryHandler
+from configurator.configdb import ConfigDB
 
 
 def _write_descriptor(dir_path: str, filename: str, descriptor: dict[str, Any]) -> None:

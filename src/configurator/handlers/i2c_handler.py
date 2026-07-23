@@ -4,7 +4,7 @@
 import logging
 from typing import Any, TYPE_CHECKING, Union
 
-from ..i2c import get_i2c_info
+from configurator.i2c import get_i2c_info
 
 if TYPE_CHECKING:
     from flask import Response

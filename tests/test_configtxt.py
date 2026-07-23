@@ -21,11 +21,11 @@ import shutil
 from unittest.mock import patch
 
 # Add parent directory to path so we can import src as a package
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Now import ConfigTxt from the src package
-from src.configurator.configtxt import ConfigTxt  # noqa: E402
-from src.configurator import configtxt as configtxt_module  # noqa: E402
+from configurator.configtxt import ConfigTxt  # noqa: E402
+from configurator import configtxt as configtxt_module  # noqa: E402
 
 
 class TestConfigTxtInitialization(unittest.TestCase):
@@ -62,7 +62,9 @@ class TestConfigTxtInitialization(unittest.TestCase):
         """Test that original checksum is computed on initialization"""
         config = ConfigTxt(self.config_path)
         self.assertIsNotNone(config.original_checksum)
-        self.assertEqual(len(config.original_checksum), 64)  # SHA256 hex digest
+        checksum = config.original_checksum
+        assert checksum is not None
+        self.assertEqual(len(checksum), 64)  # SHA256 hex digest
 
 
 class TestDetectionToggle(unittest.TestCase):
@@ -608,8 +610,8 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
 class TestConfigTxtCLI(unittest.TestCase):
     """Test CLI-level behavior for configtxt main()."""
 
-    @patch('src.configtxt.ConfigTxt')
-    @patch('src.configtxt.argparse.ArgumentParser.parse_args')
+    @patch('configurator.configtxt.ConfigTxt')
+    @patch('configurator.configtxt.argparse.ArgumentParser.parse_args')
     def test_report_change_returns_1_when_changes_made(self, mock_parse_args, mock_config_cls):
         """--report-change should return 1 when save marks changes_made=True."""
         mock_parse_args.return_value = argparse.Namespace(
@@ -649,8 +651,8 @@ class TestConfigTxtCLI(unittest.TestCase):
         mock_config.disable_i2c.assert_called_once()
         mock_config.save.assert_called_once()
 
-    @patch('src.configtxt.ConfigTxt')
-    @patch('src.configtxt.argparse.ArgumentParser.parse_args')
+    @patch('configurator.configtxt.ConfigTxt')
+    @patch('configurator.configtxt.argparse.ArgumentParser.parse_args')
     def test_report_change_returns_0_when_no_changes(self, mock_parse_args, mock_config_cls):
         """--report-change should return 0 when save keeps changes_made=False."""
         mock_parse_args.return_value = argparse.Namespace(
@@ -684,8 +686,8 @@ class TestConfigTxtCLI(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         mock_config.save.assert_called_once()
 
-    @patch('src.configtxt.ConfigTxt')
-    @patch('src.configtxt.argparse.ArgumentParser.parse_args')
+    @patch('configurator.configtxt.ConfigTxt')
+    @patch('configurator.configtxt.argparse.ArgumentParser.parse_args')
     def test_autodetect_overlay_flag_calls_method(self, mock_parse_args, mock_config_cls):
         """--autodetect-overlay should invoke ConfigTxt.autodetect_overlay()."""
         mock_parse_args.return_value = argparse.Namespace(

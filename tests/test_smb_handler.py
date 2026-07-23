@@ -63,7 +63,7 @@ flask_mock.Response = MockResponse
 sys.modules['flask'] = flask_mock
 
 # pylint: disable=wrong-import-position
-from src.configurator.handlers.smb_handler import (  # noqa: E402
+from configurator.handlers.smb_handler import (  # noqa: E402
     SMBHandler,
     load_mount_state,
     save_mount_state,
@@ -87,7 +87,7 @@ class TestSMBHandlerStateManagement(unittest.TestCase):
 
     def test_load_state_file_not_found(self):
         """Test loading state when file doesn't exist"""
-        with patch('src.handlers.smb_handler.os.path.exists', return_value=False):
+        with patch('configurator.handlers.smb_handler.os.path.exists', return_value=False):
             result = load_mount_state()
             self.assertEqual(result, {})
 
@@ -97,7 +97,7 @@ class TestSMBHandlerStateManagement(unittest.TestCase):
         with open(self.state_file, 'w', encoding='utf-8') as f:
             json.dump(test_state, f)
 
-        with patch('src.handlers.smb_handler.SAMBA_STATE_FILE', self.state_file):
+        with patch('configurator.handlers.smb_handler.SAMBA_STATE_FILE', self.state_file):
             result = load_mount_state()
             self.assertEqual(result, test_state)
 
@@ -106,7 +106,7 @@ class TestSMBHandlerStateManagement(unittest.TestCase):
         with open(self.state_file, 'w', encoding='utf-8') as f:
             f.write('invalid json')
 
-        with patch('src.handlers.smb_handler.SAMBA_STATE_FILE', self.state_file):
+        with patch('configurator.handlers.smb_handler.SAMBA_STATE_FILE', self.state_file):
             result = load_mount_state()
             self.assertEqual(result, {})
 
@@ -114,7 +114,7 @@ class TestSMBHandlerStateManagement(unittest.TestCase):
         """Test saving valid state to JSON file"""
         test_state = {'server/share': '/mnt/test', 'server2/share2': '/mnt/test2'}
 
-        with patch('src.handlers.smb_handler.SAMBA_STATE_FILE', self.state_file):
+        with patch('configurator.handlers.smb_handler.SAMBA_STATE_FILE', self.state_file):
             save_mount_state(test_state)
 
         with open(self.state_file, 'r', encoding='utf-8') as f:
@@ -123,7 +123,7 @@ class TestSMBHandlerStateManagement(unittest.TestCase):
 
     def test_save_state_empty(self):
         """Test saving empty state"""
-        with patch('src.handlers.smb_handler.SAMBA_STATE_FILE', self.state_file):
+        with patch('configurator.handlers.smb_handler.SAMBA_STATE_FILE', self.state_file):
             save_mount_state({})
 
         with open(self.state_file, 'r', encoding='utf-8') as f:
@@ -144,7 +144,7 @@ class TestSMBHandlerUtilities(unittest.TestCase):
         key = get_mount_key('server-1', 'share_1')
         self.assertEqual(key, 'server-1/share_1')
 
-    @patch('src.handlers.smb_handler.subprocess.run')
+    @patch('configurator.handlers.smb_handler.subprocess.run')
     def test_unmount_share_success(self, mock_run):
         """Test successful unmount"""
         mock_run.return_value = Mock(returncode=0, stderr='', stdout='')
@@ -152,7 +152,7 @@ class TestSMBHandlerUtilities(unittest.TestCase):
         self.assertTrue(result)
         mock_run.assert_called_once()
 
-    @patch('src.handlers.smb_handler.subprocess.run')
+    @patch('configurator.handlers.smb_handler.subprocess.run')
     def test_unmount_share_failure(self, mock_run):
         """Test failed unmount"""
         mock_run.return_value = Mock(
@@ -161,7 +161,7 @@ class TestSMBHandlerUtilities(unittest.TestCase):
         result = unmount_share('/mnt/test')
         self.assertFalse(result)
 
-    @patch('src.handlers.smb_handler.subprocess.run')
+    @patch('configurator.handlers.smb_handler.subprocess.run')
     def test_unmount_share_timeout(self, mock_run):
         """Test unmount timeout"""
         import subprocess
@@ -177,7 +177,7 @@ class TestSMBHandlerListServers(unittest.TestCase):
         """Create handler"""
         self.handler = SMBHandler()
 
-    @patch('src.handlers.smb_handler.list_all_servers')
+    @patch('configurator.handlers.smb_handler.list_all_servers')
     def test_list_servers_success(self, mock_list):
         """Test listing servers successfully"""
         mock_list.return_value = [
@@ -185,30 +185,30 @@ class TestSMBHandlerListServers(unittest.TestCase):
             {'host': 'server2', 'type': 'server'}
         ]
 
-        with patch('src.handlers.smb_handler.request', MagicMock()):
+        with patch('configurator.handlers.smb_handler.request', MagicMock()):
             response, status = get_response(self.handler.handle_list_servers())
 
         self.assertEqual(status, 200)
         self.assertEqual(response.json_data['status'], 'success')
         self.assertEqual(len(response.json_data['data']['servers']), 2)
 
-    @patch('src.handlers.smb_handler.list_all_servers')
+    @patch('configurator.handlers.smb_handler.list_all_servers')
     def test_list_servers_empty(self, mock_list):
         """Test listing when no servers found"""
         mock_list.return_value = []
 
-        with patch('src.handlers.smb_handler.request', MagicMock()):
+        with patch('configurator.handlers.smb_handler.request', MagicMock()):
             response, status = get_response(self.handler.handle_list_servers())
 
         self.assertEqual(status, 200)
         self.assertEqual(response.json_data['data']['count'], 0)
 
-    @patch('src.handlers.smb_handler.list_all_servers')
+    @patch('configurator.handlers.smb_handler.list_all_servers')
     def test_list_servers_error(self, mock_list):
         """Test error listing servers"""
         mock_list.side_effect = OSError('Network error')
 
-        with patch('src.handlers.smb_handler.request', MagicMock()):
+        with patch('configurator.handlers.smb_handler.request', MagicMock()):
             response, status = get_response(self.handler.handle_list_servers())
 
         self.assertEqual(status, 500)
@@ -222,7 +222,7 @@ class TestSMBHandlerTestConnection(unittest.TestCase):
         """Create handler"""
         self.handler = SMBHandler()
 
-    @patch('src.handlers.smb_handler.check_smb_connection')
+    @patch('configurator.handlers.smb_handler.check_smb_connection')
     def test_test_connection_success(self, mock_check):
         """Test successful connection"""
         mock_check.return_value = (True, None)
@@ -232,20 +232,20 @@ class TestSMBHandlerTestConnection(unittest.TestCase):
             'password': 'pass'
         }
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_test_connection('server1'))
 
         self.assertEqual(status, 200)
         self.assertTrue(response.json_data['data']['connected'])
 
-    @patch('src.handlers.smb_handler.check_smb_connection')
+    @patch('configurator.handlers.smb_handler.check_smb_connection')
     def test_test_connection_failure(self, mock_check):
         """Test failed connection"""
         mock_check.return_value = (False, 'Authentication failed')
         mock_request = MagicMock()
         mock_request.get_json.return_value = {}
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_test_connection('server1'))
 
         self.assertEqual(status, 200)
@@ -256,8 +256,8 @@ class TestSMBHandlerTestConnection(unittest.TestCase):
         mock_request = MagicMock()
         mock_request.get_json.return_value = {}
 
-        with patch('src.handlers.smb_handler.request', mock_request):
-            with patch('src.handlers.smb_handler.check_smb_connection') as mock_check:
+        with patch('configurator.handlers.smb_handler.request', mock_request):
+            with patch('configurator.handlers.smb_handler.check_smb_connection') as mock_check:
                 mock_check.return_value = (True, None)
                 response, status = get_response(self.handler.handle_test_connection('server1'))
 
@@ -271,7 +271,7 @@ class TestSMBHandlerListShares(unittest.TestCase):
         """Create handler"""
         self.handler = SMBHandler()
 
-    @patch('src.handlers.smb_handler.list_smb_shares')
+    @patch('configurator.handlers.smb_handler.list_smb_shares')
     def test_list_shares_success(self, mock_list):
         """Test listing shares successfully"""
         mock_list.return_value = (
@@ -284,27 +284,27 @@ class TestSMBHandlerListShares(unittest.TestCase):
         mock_request = MagicMock()
         mock_request.get_json.return_value = {'server': 'server1'}
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_list_shares())
 
         self.assertEqual(status, 200)
         self.assertEqual(response.json_data['status'], 'success')
         self.assertEqual(len(response.json_data['data']['shares']), 2)
 
-    @patch('src.handlers.smb_handler.list_smb_shares')
+    @patch('configurator.handlers.smb_handler.list_smb_shares')
     def test_list_shares_no_server(self, mock_list):
         """Test listing shares without server parameter"""
         mock_request = MagicMock()
         mock_request.get_json.return_value = {}
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_list_shares())
 
         self.assertEqual(status, 400)
         self.assertEqual(response.json_data['status'], 'error')
         self.assertIn('server', response.json_data['message'].lower())
 
-    @patch('src.handlers.smb_handler.list_smb_shares')
+    @patch('configurator.handlers.smb_handler.list_smb_shares')
     def test_list_shares_detailed(self, mock_list):
         """Test listing shares with detailed info"""
         mock_list.return_value = (
@@ -315,20 +315,20 @@ class TestSMBHandlerListShares(unittest.TestCase):
         mock_request = MagicMock()
         mock_request.get_json.return_value = {'server': 'server1', 'detailed': True}
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_list_shares())
 
         self.assertEqual(status, 200)
         self.assertIn('size', response.json_data['data']['shares'][0])
 
-    @patch('src.handlers.smb_handler.list_smb_shares')
+    @patch('configurator.handlers.smb_handler.list_smb_shares')
     def test_list_shares_exception(self, mock_list):
         """Test handling exception in list_shares"""
         mock_list.side_effect = OSError('Connection refused')
         mock_request = MagicMock()
         mock_request.get_json.return_value = {'server': 'server1'}
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_list_shares())
 
         self.assertEqual(status, 500)
@@ -342,7 +342,7 @@ class TestSMBHandlerListMounts(unittest.TestCase):
         """Create handler"""
         self.handler = SMBHandler()
 
-    @patch('src.handlers.smb_handler.list_configured_mounts')
+    @patch('configurator.handlers.smb_handler.list_configured_mounts')
     def test_list_mounts_success(self, mock_list):
         """Test listing mounts successfully"""
         mock_list.return_value = [
@@ -352,7 +352,7 @@ class TestSMBHandlerListMounts(unittest.TestCase):
              'mounted': False}
         ]
 
-        with patch('src.handlers.smb_handler.request', MagicMock()):
+        with patch('configurator.handlers.smb_handler.request', MagicMock()):
             response, status = get_response(self.handler.handle_list_mounts())
 
         self.assertEqual(status, 200)
@@ -360,12 +360,12 @@ class TestSMBHandlerListMounts(unittest.TestCase):
         self.assertEqual(response.json_data['data']['summary']['mounted'], 1)
         self.assertEqual(response.json_data['data']['summary']['unmounted'], 1)
 
-    @patch('src.handlers.smb_handler.list_configured_mounts')
+    @patch('configurator.handlers.smb_handler.list_configured_mounts')
     def test_list_mounts_empty(self, mock_list):
         """Test listing when no mounts configured"""
         mock_list.return_value = []
 
-        with patch('src.handlers.smb_handler.request', MagicMock()):
+        with patch('configurator.handlers.smb_handler.request', MagicMock()):
             response, status = get_response(self.handler.handle_list_mounts())
 
         self.assertEqual(status, 200)
@@ -384,7 +384,7 @@ class TestSMBHandlerManageMount(unittest.TestCase):
         mock_request = MagicMock()
         mock_request.is_json = False
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_manage_mount())
 
         self.assertEqual(status, 400)
@@ -396,7 +396,7 @@ class TestSMBHandlerManageMount(unittest.TestCase):
         mock_request.is_json = True
         mock_request.get_json.return_value = {'server': 'server1'}
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_manage_mount())
 
         self.assertEqual(status, 400)
@@ -412,13 +412,13 @@ class TestSMBHandlerManageMount(unittest.TestCase):
             'share': 'share1'
         }
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_manage_mount())
 
         self.assertEqual(status, 400)
         self.assertEqual(response.json_data['status'], 'error')
 
-    @patch('src.handlers.smb_handler.add_mount_config')
+    @patch('configurator.handlers.smb_handler.add_mount_config')
     def test_manage_mount_add_success(self, mock_add):
         """Test adding mount configuration"""
         mock_add.return_value = (True, None)
@@ -431,13 +431,13 @@ class TestSMBHandlerManageMount(unittest.TestCase):
             'mountpoint': '/mnt/test'
         }
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_manage_mount())
 
         self.assertEqual(status, 200)
         self.assertEqual(response.json_data['status'], 'success')
 
-    @patch('src.handlers.smb_handler.add_mount_config')
+    @patch('configurator.handlers.smb_handler.add_mount_config')
     def test_manage_mount_add_exists(self, mock_add):
         """Test adding mount that already exists"""
         mock_add.return_value = (False, 'already exists')
@@ -449,13 +449,13 @@ class TestSMBHandlerManageMount(unittest.TestCase):
             'share': 'share1'
         }
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_manage_mount())
 
         self.assertEqual(status, 400)
         self.assertEqual(response.json_data['status'], 'error')
 
-    @patch('src.handlers.smb_handler.remove_mount_config')
+    @patch('configurator.handlers.smb_handler.remove_mount_config')
     def test_manage_mount_remove_success(self, mock_remove):
         """Test removing mount configuration"""
         mock_remove.return_value = (True, '/mnt/test')
@@ -467,13 +467,13 @@ class TestSMBHandlerManageMount(unittest.TestCase):
             'share': 'share1'
         }
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_manage_mount())
 
         self.assertEqual(status, 200)
         self.assertEqual(response.json_data['status'], 'success')
 
-    @patch('src.handlers.smb_handler.remove_mount_config')
+    @patch('configurator.handlers.smb_handler.remove_mount_config')
     def test_manage_mount_remove_not_found(self, mock_remove):
         """Test removing non-existent mount"""
         mock_remove.return_value = (False, None)
@@ -485,7 +485,7 @@ class TestSMBHandlerManageMount(unittest.TestCase):
             'share': 'share1'
         }
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_manage_mount())
 
         self.assertEqual(status, 404)
@@ -499,9 +499,9 @@ class TestSMBHandlerMountAll(unittest.TestCase):
         """Create handler"""
         self.handler = SMBHandler()
 
-    @patch('src.handlers.smb_handler.subprocess.run')
-    @patch('src.handlers.smb_handler.list_configured_mounts')
-    @patch('src.handlers.smb_handler.load_mount_state')
+    @patch('configurator.handlers.smb_handler.subprocess.run')
+    @patch('configurator.handlers.smb_handler.list_configured_mounts')
+    @patch('configurator.handlers.smb_handler.load_mount_state')
     def test_mount_all_success(self, mock_load, mock_list, mock_run):
         """Test mounting all shares successfully"""
         mock_load.return_value = {}
@@ -510,7 +510,7 @@ class TestSMBHandlerMountAll(unittest.TestCase):
         ]
         mock_run.return_value = Mock(returncode=0, stderr='', stdout='')
 
-        with patch('src.handlers.smb_handler.request', MagicMock()):
+        with patch('configurator.handlers.smb_handler.request', MagicMock()):
             with patch.object(self.handler, '_trigger_mpd_reconcile') as mock_mpd:
                 mock_mpd.return_value = {'status': 'success'}
                 response, status = get_response(self.handler.handle_mount_all_samba())
@@ -518,24 +518,24 @@ class TestSMBHandlerMountAll(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(response.json_data['status'], 'success')
 
-    @patch('src.handlers.smb_handler.subprocess.run')
-    @patch('src.handlers.smb_handler.list_configured_mounts')
-    @patch('src.handlers.smb_handler.load_mount_state')
+    @patch('configurator.handlers.smb_handler.subprocess.run')
+    @patch('configurator.handlers.smb_handler.list_configured_mounts')
+    @patch('configurator.handlers.smb_handler.load_mount_state')
     def test_mount_all_service_failure(self, mock_load, mock_list, mock_run):
         """Test mount all with service restart failure"""
         mock_load.return_value = {}
         mock_list.return_value = []
         mock_run.return_value = Mock(returncode=1, stderr='Failed', stdout='')
 
-        with patch('src.handlers.smb_handler.request', MagicMock()):
+        with patch('configurator.handlers.smb_handler.request', MagicMock()):
             response, status = get_response(self.handler.handle_mount_all_samba())
 
         self.assertEqual(status, 500)
         self.assertEqual(response.json_data['status'], 'error')
 
-    @patch('src.handlers.smb_handler.subprocess.run')
-    @patch('src.handlers.smb_handler.list_configured_mounts')
-    @patch('src.handlers.smb_handler.load_mount_state')
+    @patch('configurator.handlers.smb_handler.subprocess.run')
+    @patch('configurator.handlers.smb_handler.list_configured_mounts')
+    @patch('configurator.handlers.smb_handler.load_mount_state')
     def test_mount_all_timeout(self, mock_load, mock_list, mock_run):
         """Test mount all with service timeout"""
         import subprocess
@@ -543,15 +543,15 @@ class TestSMBHandlerMountAll(unittest.TestCase):
         mock_list.return_value = []
         mock_run.side_effect = subprocess.TimeoutExpired('systemctl', 30)
 
-        with patch('src.handlers.smb_handler.request', MagicMock()):
+        with patch('configurator.handlers.smb_handler.request', MagicMock()):
             response, status = get_response(self.handler.handle_mount_all_samba())
 
         self.assertEqual(status, 500)
         self.assertEqual(response.json_data['status'], 'error')
 
-    @patch('src.handlers.smb_handler.subprocess.run')
-    @patch('src.handlers.smb_handler.list_configured_mounts')
-    @patch('src.handlers.smb_handler.load_mount_state')
+    @patch('configurator.handlers.smb_handler.subprocess.run')
+    @patch('configurator.handlers.smb_handler.list_configured_mounts')
+    @patch('configurator.handlers.smb_handler.load_mount_state')
     def test_mount_all_with_cleanup(self, mock_load, mock_list, mock_run):
         """Test mount all with unmounting removed shares"""
         mock_run.return_value = Mock(returncode=0, stderr='', stdout='')
@@ -559,8 +559,8 @@ class TestSMBHandlerMountAll(unittest.TestCase):
         mock_load.return_value = {'server1/share1': '/mnt/old'}
         mock_list.return_value = []
 
-        with patch('src.handlers.smb_handler.request', MagicMock()):
-            with patch('src.handlers.smb_handler.unmount_share', return_value=True) as mock_unmount:
+        with patch('configurator.handlers.smb_handler.request', MagicMock()):
+            with patch('configurator.handlers.smb_handler.unmount_share', return_value=True) as mock_unmount:
                 with patch.object(self.handler, '_trigger_mpd_reconcile') as mock_mpd:
                     mock_mpd.return_value = {'status': 'success'}
                     response, status = get_response(self.handler.handle_mount_all_samba())
@@ -582,8 +582,8 @@ class TestSMBHandlerEdgeCases(unittest.TestCase):
         mock_request = MagicMock()
         mock_request.get_json.return_value = {'server': 'override-server'}
 
-        with patch('src.handlers.smb_handler.request', mock_request):
-            with patch('src.handlers.smb_handler.check_smb_connection') as mock_check:
+        with patch('configurator.handlers.smb_handler.request', mock_request):
+            with patch('configurator.handlers.smb_handler.check_smb_connection') as mock_check:
                 mock_check.return_value = (True, None)
                 response, status = get_response(self.handler.handle_test_connection('url-server'))
 
@@ -592,14 +592,14 @@ class TestSMBHandlerEdgeCases(unittest.TestCase):
         call_args = mock_check.call_args
         self.assertEqual(call_args.kwargs['server'], 'override-server')
 
-    @patch('src.handlers.smb_handler.subprocess.run')
+    @patch('configurator.handlers.smb_handler.subprocess.run')
     def test_manage_mount_exception(self, mock_run):
         """Test exception handling in manage_mount"""
         mock_request = MagicMock()
         mock_request.is_json = True
         mock_request.get_json.side_effect = Exception('JSON parse error')
 
-        with patch('src.handlers.smb_handler.request', mock_request):
+        with patch('configurator.handlers.smb_handler.request', mock_request):
             response, status = get_response(self.handler.handle_manage_mount())
 
         self.assertEqual(status, 500)

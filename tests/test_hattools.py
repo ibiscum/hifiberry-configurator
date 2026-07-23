@@ -19,7 +19,7 @@ from io import StringIO
 # Add repository root to path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.configurator.hattools import (
+from configurator.hattools import (
     get_hat_info, main,
     DEFAULT_VENDOR, DEFAULT_PRODUCT, DEFAULT_UUID
 )
@@ -28,7 +28,7 @@ from src.configurator.hattools import (
 class TestGetHatInfo(unittest.TestCase):
     """Test get_hat_info function"""
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_success_with_values(self, mock_hat_class):
         """Test successful HAT info retrieval with all values"""
         mock_hat = MagicMock()
@@ -46,7 +46,7 @@ class TestGetHatInfo(unittest.TestCase):
         self.assertEqual(result['product'], 'DAC+ Pro')
         self.assertEqual(result['uuid'], '12345678-1234-5678-1234-567812345678')
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_success_with_unknown_values(self, mock_hat_class):
         """Test HAT info retrieval when values are Unknown"""
         mock_hat = MagicMock()
@@ -64,7 +64,7 @@ class TestGetHatInfo(unittest.TestCase):
         self.assertIsNone(result['product'])
         self.assertIsNone(result['uuid'])
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_success_with_partial_values(self, mock_hat_class):
         """Test HAT info retrieval with some Unknown values"""
         mock_hat = MagicMock()
@@ -82,7 +82,7 @@ class TestGetHatInfo(unittest.TestCase):
         self.assertIsNone(result['product'])
         self.assertEqual(result['uuid'], '12345678-1234-5678-1234-567812345678')
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_failure(self, mock_hat_class):
         """Test HAT info retrieval when short_info fails"""
         mock_hat = MagicMock()
@@ -95,7 +95,7 @@ class TestGetHatInfo(unittest.TestCase):
         self.assertIsNone(result['product'])
         self.assertIsNone(result['uuid'])
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_exception(self, mock_hat_class):
         """Test HAT info retrieval when exception is raised"""
         mock_hat_class.side_effect = Exception("EEPROM read error")
@@ -106,7 +106,7 @@ class TestGetHatInfo(unittest.TestCase):
         self.assertIsNone(result['product'])
         self.assertIsNone(result['uuid'])
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_short_info_exception(self, mock_hat_class):
         """Test HAT info when short_info raises exception"""
         mock_hat = MagicMock()
@@ -121,36 +121,36 @@ class TestGetHatInfo(unittest.TestCase):
 
     def test_get_hat_info_without_hateeprom(self):
         """Test get_hat_info when HatEEPROM is None"""
-        with patch('src.hattools.HatEEPROM', None):
+        with patch('configurator.hattools.HatEEPROM', None):
             result = get_hat_info(verbose=False)
 
             self.assertIsNone(result['vendor'])
             self.assertIsNone(result['product'])
             self.assertIsNone(result['uuid'])
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_verbose_true(self, mock_hat_class):
         """Test get_hat_info with verbose=True logs warnings"""
         mock_hat = MagicMock()
         mock_hat.short_info.return_value = {'success': False}
         mock_hat_class.return_value = mock_hat
 
-        with patch('src.hattools.logging.error'):
+        with patch('configurator.hattools.logging.error'):
             result = get_hat_info(verbose=True)
             # Should not raise, just return None values
             self.assertIsNone(result['vendor'])
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_verbose_exception(self, mock_hat_class):
         """Test get_hat_info verbose mode with exception"""
         mock_hat_class.side_effect = Exception("Test error")
 
-        with patch('src.hattools.logging.error') as mock_error:
+        with patch('configurator.hattools.logging.error') as mock_error:
             get_hat_info(verbose=True)
             # Error should be logged
             mock_error.assert_called()
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_missing_key(self, mock_hat_class):
         """Test HAT info when response is missing keys"""
         mock_hat = MagicMock()
@@ -164,7 +164,7 @@ class TestGetHatInfo(unittest.TestCase):
         result = get_hat_info(verbose=False)
         self.assertEqual(result, {'vendor': None, 'product': None, 'uuid': None})
 
-    @patch('src.hattools.HatEEPROM')
+    @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_empty_response(self, mock_hat_class):
         """Test HAT info with empty response"""
         mock_hat = MagicMock()
@@ -197,7 +197,7 @@ class TestDefaultConstants(unittest.TestCase):
 class TestMainCommandLine(unittest.TestCase):
     """Test main command-line interface"""
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools'])
     def test_main_default_output_with_values(self, mock_get_info):
         """Test main with default output when HAT info is available"""
@@ -212,7 +212,7 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertEqual(fake_out.getvalue().strip(), "HiFiBerry:DAC+ Pro")
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools'])
     def test_main_default_output_with_none_values(self, mock_get_info):
         """Test main with default output when HAT info is None"""
@@ -228,7 +228,7 @@ class TestMainCommandLine(unittest.TestCase):
             output = fake_out.getvalue().strip()
             self.assertEqual(output, f"{DEFAULT_VENDOR}:{DEFAULT_PRODUCT}")
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '--all'])
     def test_main_all_output_with_values(self, mock_get_info):
         """Test main with --all flag showing vendor:product:uuid"""
@@ -243,7 +243,7 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertEqual(fake_out.getvalue().strip(), "HiFiBerry:DAC+ Pro:12345678")
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '--all'])
     def test_main_all_output_with_none_values(self, mock_get_info):
         """Test main with --all flag and None values"""
@@ -260,7 +260,7 @@ class TestMainCommandLine(unittest.TestCase):
             expected = f"{DEFAULT_VENDOR}:{DEFAULT_PRODUCT}:{DEFAULT_UUID}"
             self.assertEqual(output, expected)
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '-a'])
     def test_main_all_output_short_flag(self, mock_get_info):
         """Test main with -a short flag"""
@@ -275,7 +275,7 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertEqual(fake_out.getvalue().strip(), "HiFiBerry:DAC:abc123")
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '--verbose'])
     def test_main_verbose_flag(self, mock_get_info):
         """Test main with --verbose flag"""
@@ -291,7 +291,7 @@ class TestMainCommandLine(unittest.TestCase):
             mock_get_info.assert_called_with(verbose=True)
             self.assertEqual(result, 0)
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '-v'])
     def test_main_verbose_flag_short(self, mock_get_info):
         """Test main with -v short flag"""
@@ -306,7 +306,7 @@ class TestMainCommandLine(unittest.TestCase):
             mock_get_info.assert_called_with(verbose=True)
             self.assertEqual(result, 0)
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '--all', '--verbose'])
     def test_main_all_and_verbose_flags(self, mock_get_info):
         """Test main with both --all and --verbose flags"""
@@ -322,7 +322,7 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(fake_out.getvalue().strip(), "HiFiBerry:DAC:xyz")
             self.assertEqual(result, 0)
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools'])
     def test_main_partial_none_values(self, mock_get_info):
         """Test main with some None values"""
@@ -338,7 +338,7 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(output, f"HiFiBerry:{DEFAULT_PRODUCT}")
             self.assertEqual(result, 0)
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '--all'])
     def test_main_all_with_partial_none_values(self, mock_get_info):
         """Test main with --all and some None values"""
@@ -359,7 +359,7 @@ class TestMainCommandLine(unittest.TestCase):
 class TestMainReturnValues(unittest.TestCase):
     """Test main function return values"""
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools'])
     def test_main_returns_zero(self, mock_get_info):
         """Test that main returns 0"""
@@ -374,7 +374,7 @@ class TestMainReturnValues(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertIsInstance(result, int)
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '--all'])
     def test_main_returns_zero_with_all(self, mock_get_info):
         """Test that main returns 0 with --all flag"""
@@ -392,7 +392,7 @@ class TestMainReturnValues(unittest.TestCase):
 class TestOutputFormatting(unittest.TestCase):
     """Test output formatting"""
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools'])
     def test_vendor_product_format(self, mock_get_info):
         """Test vendor:product output format"""
@@ -411,7 +411,7 @@ class TestOutputFormatting(unittest.TestCase):
             self.assertEqual(parts[0], 'HiFiBerry')
             self.assertEqual(parts[1], 'DAC+ Pro')
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '--all'])
     def test_vendor_product_uuid_format(self, mock_get_info):
         """Test vendor:product:uuid output format"""
@@ -432,7 +432,7 @@ class TestOutputFormatting(unittest.TestCase):
             self.assertEqual(parts[1], 'DAC')
             self.assertEqual(parts[2], '12345678')
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools'])
     def test_output_no_trailing_newline_in_content(self, mock_get_info):
         """Test that output content doesn't have trailing newlines when stripped"""
@@ -452,7 +452,7 @@ class TestOutputFormatting(unittest.TestCase):
 class TestEdgeCasesAndRobustness(unittest.TestCase):
     """Test edge cases and robustness"""
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools'])
     def test_main_with_empty_strings(self, mock_get_info):
         """Test main with empty string values"""
@@ -468,7 +468,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
             output = fake_out.getvalue().strip()
             self.assertEqual(output, ":")
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools', '--all'])
     def test_main_with_special_characters(self, mock_get_info):
         """Test main with special characters in values"""
@@ -485,7 +485,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
             self.assertIn('DAC+ Pro®', output)
             self.assertEqual(result, 0)
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools'])
     def test_main_with_unicode_values(self, mock_get_info):
         """Test main with Unicode characters"""
@@ -501,7 +501,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
             self.assertIn('HiFi-音声', output)
             self.assertEqual(result, 0)
 
-    @patch('src.hattools.get_hat_info')
+    @patch('configurator.hattools.get_hat_info')
     @patch('sys.argv', ['hattools'])
     def test_main_with_very_long_values(self, mock_get_info):
         """Test main with very long values"""

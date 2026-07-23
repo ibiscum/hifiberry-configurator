@@ -154,10 +154,11 @@ class TestBLEProvisioningHandlerStart(unittest.TestCase):
         mock_result.stderr = ""
         mock_run.return_value = mock_result
 
-        response = self.handler.handle_start()
+        response, status_code = self.handler.handle_start()
+
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertIn('started', data['message'].lower())
 
@@ -169,24 +170,24 @@ class TestBLEProvisioningHandlerStart(unittest.TestCase):
         mock_result.stderr = "Unit not found\n"
         mock_run.return_value = mock_result
 
-        response = self.handler.handle_start()
-        data, status_code = response
+        response, status_code = self.handler.handle_start()
+        data = response.get_json()
 
         self.assertEqual(status_code, 500)
-        self.assertEqual(data.get_json()['status'], 'error')
-        self.assertIn('Failed to start', data.get_json()['message'])
+        self.assertEqual(data['status'], 'error')
+        self.assertIn('Failed to start', data['message'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_start_exception(self, mock_run):
         """Test start with exception"""
         mock_run.side_effect = Exception("Permission denied")
 
-        response = self.handler.handle_start()
-        data, status_code = response
+        response, status_code = self.handler.handle_start()
+        data = response.get_json()
 
         self.assertEqual(status_code, 500)
-        self.assertEqual(data.get_json()['status'], 'error')
-        self.assertIn('Permission denied', data.get_json()['message'])
+        self.assertEqual(data['status'], 'error')
+        self.assertIn('Permission denied', data['message'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_start_creates_override(self, mock_run):
@@ -286,10 +287,12 @@ class TestBLEProvisioningHandlerStop(unittest.TestCase):
         mock_result.stderr = ""
         mock_run.return_value = mock_result
 
-        response = self.handler.handle_stop()
+        # 1. Das Tupel direkt beim Funktionsaufruf entpacken
+        response, status_code = self.handler.handle_stop()
+
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertIn('stopped', data['message'].lower())
 
@@ -301,24 +304,24 @@ class TestBLEProvisioningHandlerStop(unittest.TestCase):
         mock_result.stderr = "Unit not loaded\n"
         mock_run.return_value = mock_result
 
-        response = self.handler.handle_stop()
-        data, status_code = response
+        response, status_code = self.handler.handle_stop()
+        data = response.get_json()
 
         self.assertEqual(status_code, 500)
-        self.assertEqual(data.get_json()['status'], 'error')
-        self.assertIn('Failed to stop', data.get_json()['message'])
+        self.assertEqual(data['status'], 'error')
+        self.assertIn('Failed to stop', data['message'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_stop_exception(self, mock_run):
         """Test stop with exception"""
         mock_run.side_effect = Exception("Connection refused")
 
-        response = self.handler.handle_stop()
-        data, status_code = response
+        response, status_code = self.handler.handle_stop()
+        data = response.get_json()
 
         self.assertEqual(status_code, 500)
-        self.assertEqual(data.get_json()['status'], 'error')
-        self.assertIn('Connection refused', data.get_json()['message'])
+        self.assertEqual(data['status'], 'error')
+        self.assertIn('Connection refused', data['message'])
 
     @patch('configurator.handlers.ble_handler.subprocess.run')
     def test_stop_calls_systemctl_stop(self, mock_run):
@@ -530,19 +533,19 @@ class TestBLEProvisioningHandlerEdgeCases(unittest.TestCase):
         mock_run.return_value = mock_result
 
         # Check status
-        response1 = self.handler.handle_get_status()
+        response1, _ = self.handler.handle_get_status()
         self.assertEqual(response1.get_json()['status'], 'success')
 
         # Stop service
-        response2 = self.handler.handle_stop()
+        response2, _ = self.handler.handle_stop()
         self.assertEqual(response2.get_json()['status'], 'success')
 
         # Start service
-        response3 = self.handler.handle_start()
+        response3, _ = self.handler.handle_start()
         self.assertEqual(response3.get_json()['status'], 'success')
 
         # Check status again
-        response4 = self.handler.handle_get_status()
+        response4, _ = self.handler.handle_get_status()
         self.assertEqual(response4.get_json()['status'], 'success')
 
 

@@ -35,8 +35,7 @@ flask_mock.Response = MockResponse
 flask_mock.request = MagicMock()
 sys.modules['flask'] = flask_mock
 
-from src.configurator.handlers.volume_handler import VolumeHandler  # noqa: E402
-
+from configurator.handlers.volume_handler import VolumeHandler  # noqa: E402
 
 def get_response(result):
     """Helper to extract response and status code from handler result"""
@@ -61,7 +60,7 @@ class TestVolumeHandlerListControls(unittest.TestCase):
         """Create handler"""
         self.handler = VolumeHandler()
 
-    @patch('src.handlers.volume_handler.get_available_headphone_controls')
+    @patch('configurator.handlers.volume_handler.get_available_headphone_controls')
     def test_list_controls_success(self, mock_get_controls):
         """Test successful listing of headphone controls"""
         mock_get_controls.return_value = ['Headphone', 'Speaker']
@@ -73,7 +72,7 @@ class TestVolumeHandlerListControls(unittest.TestCase):
         self.assertEqual(len(result['data']['controls']), 2)
         self.assertEqual(result['data']['count'], 2)
 
-    @patch('src.handlers.volume_handler.get_available_headphone_controls')
+    @patch('configurator.handlers.volume_handler.get_available_headphone_controls')
     def test_list_controls_empty(self, mock_get_controls):
         """Test listing when no controls are available"""
         mock_get_controls.return_value = []
@@ -84,7 +83,7 @@ class TestVolumeHandlerListControls(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['count'], 0)
 
-    @patch('src.handlers.volume_handler.get_available_headphone_controls')
+    @patch('configurator.handlers.volume_handler.get_available_headphone_controls')
     def test_list_controls_single(self, mock_get_controls):
         """Test listing with single control"""
         mock_get_controls.return_value = ['Headphone']
@@ -94,7 +93,7 @@ class TestVolumeHandlerListControls(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['count'], 1)
 
-    @patch('src.handlers.volume_handler.get_available_headphone_controls')
+    @patch('configurator.handlers.volume_handler.get_available_headphone_controls')
     def test_list_controls_error(self, mock_get_controls):
         """Test list when error occurs"""
         mock_get_controls.side_effect = Exception('Audio device not found')
@@ -113,7 +112,7 @@ class TestVolumeHandlerGetVolume(unittest.TestCase):
         """Create handler"""
         self.handler = VolumeHandler()
 
-    @patch('src.handlers.volume_handler.get_headphone_volume')
+    @patch('configurator.handlers.volume_handler.get_headphone_volume')
     def test_get_volume_success(self, mock_get_volume):
         """Test successful retrieval of headphone volume"""
         mock_get_volume.return_value = (75, 'Headphone')
@@ -125,7 +124,7 @@ class TestVolumeHandlerGetVolume(unittest.TestCase):
         self.assertEqual(result['data']['volume'], 75)
         self.assertEqual(result['data']['control'], 'Headphone')
 
-    @patch('src.handlers.volume_handler.get_headphone_volume')
+    @patch('configurator.handlers.volume_handler.get_headphone_volume')
     def test_get_volume_zero(self, mock_get_volume):
         """Test getting volume when set to 0"""
         mock_get_volume.return_value = (0, 'Speaker')
@@ -135,7 +134,7 @@ class TestVolumeHandlerGetVolume(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['volume'], 0)
 
-    @patch('src.handlers.volume_handler.get_headphone_volume')
+    @patch('configurator.handlers.volume_handler.get_headphone_volume')
     def test_get_volume_max(self, mock_get_volume):
         """Test getting volume when set to maximum"""
         mock_get_volume.return_value = (100, 'Headphone')
@@ -145,7 +144,7 @@ class TestVolumeHandlerGetVolume(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['volume'], 100)
 
-    @patch('src.handlers.volume_handler.get_headphone_volume')
+    @patch('configurator.handlers.volume_handler.get_headphone_volume')
     def test_get_volume_not_available(self, mock_get_volume):
         """Test getting volume when no controls available"""
         mock_get_volume.return_value = (None, None)
@@ -156,7 +155,7 @@ class TestVolumeHandlerGetVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('No headphone volume', result['message'])
 
-    @patch('src.handlers.volume_handler.get_headphone_volume')
+    @patch('configurator.handlers.volume_handler.get_headphone_volume')
     def test_get_volume_error(self, mock_get_volume):
         """Test get when error occurs"""
         mock_get_volume.side_effect = Exception('ALSA error')
@@ -175,8 +174,8 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         """Create handler"""
         self.handler = VolumeHandler()
 
-    @patch('src.handlers.volume_handler.request')
-    @patch('src.handlers.volume_handler.set_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.set_headphone_volume')
     def test_set_volume_success(self, mock_set_volume, mock_request):
         """Test successful setting of headphone volume"""
         mock_request.get_json.return_value = {'volume': 50}
@@ -189,8 +188,8 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(result['data']['volume'], 50)
         mock_set_volume.assert_called_once_with('50')
 
-    @patch('src.handlers.volume_handler.request')
-    @patch('src.handlers.volume_handler.set_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.set_headphone_volume')
     def test_set_volume_zero(self, mock_set_volume, mock_request):
         """Test setting volume to 0 (mute)"""
         mock_request.get_json.return_value = {'volume': 0}
@@ -201,8 +200,8 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['volume'], 0)
 
-    @patch('src.handlers.volume_handler.request')
-    @patch('src.handlers.volume_handler.set_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.set_headphone_volume')
     def test_set_volume_max(self, mock_set_volume, mock_request):
         """Test setting volume to 100 (maximum)"""
         mock_request.get_json.return_value = {'volume': 100}
@@ -213,7 +212,7 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['volume'], 100)
 
-    @patch('src.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.request')
     def test_set_volume_negative(self, mock_request):
         """Test setting volume to negative value (invalid)"""
         mock_request.get_json.return_value = {'volume': -10}
@@ -224,7 +223,7 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('between 0 and 100', result['message'])
 
-    @patch('src.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.request')
     def test_set_volume_exceeds_max(self, mock_request):
         """Test setting volume above 100 (invalid)"""
         mock_request.get_json.return_value = {'volume': 150}
@@ -235,7 +234,7 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('between 0 and 100', result['message'])
 
-    @patch('src.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.request')
     def test_set_volume_invalid_type(self, mock_request):
         """Test setting volume with invalid type (string)"""
         mock_request.get_json.return_value = {'volume': 'invalid'}
@@ -246,8 +245,8 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('valid integer', result['message'])
 
-    @patch('src.handlers.volume_handler.request')
-    @patch('src.handlers.volume_handler.set_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.set_headphone_volume')
     def test_set_volume_float(self, mock_set_volume, mock_request):
         """Test setting volume with float (should convert to int)"""
         mock_request.get_json.return_value = {'volume': 50.7}
@@ -258,7 +257,7 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['volume'], 50)
 
-    @patch('src.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.request')
     def test_set_volume_missing_parameter(self, mock_request):
         """Test setting volume without volume parameter"""
         mock_request.get_json.return_value = {'other': 'data'}
@@ -269,7 +268,7 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('volume parameter is required', result['message'])
 
-    @patch('src.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.request')
     def test_set_volume_no_json_data(self, mock_request):
         """Test setting volume with no JSON data"""
         mock_request.get_json.return_value = None
@@ -280,7 +279,7 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('No JSON data', result['message'])
 
-    @patch('src.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.request')
     def test_set_volume_empty_json(self, mock_request):
         """Test setting volume with empty JSON object"""
         mock_request.get_json.return_value = {}
@@ -290,8 +289,8 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn('No JSON data', result['message'])
 
-    @patch('src.handlers.volume_handler.request')
-    @patch('src.handlers.volume_handler.set_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.set_headphone_volume')
     def test_set_volume_not_available(self, mock_set_volume, mock_request):
         """Test setting volume when no controls available"""
         mock_request.get_json.return_value = {'volume': 50}
@@ -303,8 +302,8 @@ class TestVolumeHandlerSetVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('No headphone volume', result['message'])
 
-    @patch('src.handlers.volume_handler.request')
-    @patch('src.handlers.volume_handler.set_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.set_headphone_volume')
     def test_set_volume_error(self, mock_set_volume, mock_request):
         """Test set when error occurs"""
         mock_request.get_json.return_value = {'volume': 50}
@@ -324,7 +323,7 @@ class TestVolumeHandlerStoreVolume(unittest.TestCase):
         """Create handler"""
         self.handler = VolumeHandler()
 
-    @patch('src.handlers.volume_handler.store_headphone_volume')
+    @patch('configurator.handlers.volume_handler.store_headphone_volume')
     def test_store_volume_success(self, mock_store):
         """Test successful storing of headphone volume"""
         mock_store.return_value = True
@@ -335,7 +334,7 @@ class TestVolumeHandlerStoreVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertIn('stored successfully', result['message'])
 
-    @patch('src.handlers.volume_handler.store_headphone_volume')
+    @patch('configurator.handlers.volume_handler.store_headphone_volume')
     def test_store_volume_not_available(self, mock_store):
         """Test storing when no controls available"""
         mock_store.return_value = False
@@ -346,7 +345,7 @@ class TestVolumeHandlerStoreVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('No headphone volume', result['message'])
 
-    @patch('src.handlers.volume_handler.store_headphone_volume')
+    @patch('configurator.handlers.volume_handler.store_headphone_volume')
     def test_store_volume_error(self, mock_store):
         """Test store when error occurs"""
         mock_store.side_effect = Exception('File write error')
@@ -365,7 +364,7 @@ class TestVolumeHandlerRestoreVolume(unittest.TestCase):
         """Create handler"""
         self.handler = VolumeHandler()
 
-    @patch('src.handlers.volume_handler.restore_headphone_volume')
+    @patch('configurator.handlers.volume_handler.restore_headphone_volume')
     def test_restore_volume_success(self, mock_restore):
         """Test successful restoring of headphone volume"""
         mock_restore.return_value = True
@@ -376,7 +375,7 @@ class TestVolumeHandlerRestoreVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertIn('restored successfully', result['message'])
 
-    @patch('src.handlers.volume_handler.restore_headphone_volume')
+    @patch('configurator.handlers.volume_handler.restore_headphone_volume')
     def test_restore_volume_not_available(self, mock_restore):
         """Test restoring when no settings or controls available"""
         mock_restore.return_value = False
@@ -387,7 +386,7 @@ class TestVolumeHandlerRestoreVolume(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('No headphone volume settings', result['message'])
 
-    @patch('src.handlers.volume_handler.restore_headphone_volume')
+    @patch('configurator.handlers.volume_handler.restore_headphone_volume')
     def test_restore_volume_error(self, mock_restore):
         """Test restore when error occurs"""
         mock_restore.side_effect = Exception('File read error')
@@ -406,7 +405,7 @@ class TestVolumeHandlerResponseFormat(unittest.TestCase):
         """Create handler"""
         self.handler = VolumeHandler()
 
-    @patch('src.handlers.volume_handler.get_available_headphone_controls')
+    @patch('configurator.handlers.volume_handler.get_available_headphone_controls')
     def test_list_controls_response_format(self, mock_get_controls):
         """Verify list controls response has required fields"""
         mock_get_controls.return_value = ['Headphone']
@@ -418,7 +417,7 @@ class TestVolumeHandlerResponseFormat(unittest.TestCase):
         self.assertIn('controls', result['data'])
         self.assertIn('count', result['data'])
 
-    @patch('src.handlers.volume_handler.get_headphone_volume')
+    @patch('configurator.handlers.volume_handler.get_headphone_volume')
     def test_get_volume_response_format(self, mock_get_volume):
         """Verify get volume response has required fields"""
         mock_get_volume.return_value = (75, 'Headphone')
@@ -430,8 +429,8 @@ class TestVolumeHandlerResponseFormat(unittest.TestCase):
         self.assertIn('volume', result['data'])
         self.assertIn('control', result['data'])
 
-    @patch('src.handlers.volume_handler.request')
-    @patch('src.handlers.volume_handler.set_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.set_headphone_volume')
     def test_set_volume_response_format(self, mock_set_volume, mock_request):
         """Verify set volume response has required fields"""
         mock_request.get_json.return_value = {'volume': 50}
@@ -444,7 +443,7 @@ class TestVolumeHandlerResponseFormat(unittest.TestCase):
         self.assertIn('data', result)
         self.assertIn('volume', result['data'])
 
-    @patch('src.handlers.volume_handler.store_headphone_volume')
+    @patch('configurator.handlers.volume_handler.store_headphone_volume')
     def test_store_volume_response_format(self, mock_store):
         """Verify store volume response has required fields"""
         mock_store.return_value = True
@@ -454,7 +453,7 @@ class TestVolumeHandlerResponseFormat(unittest.TestCase):
         self.assertIn('status', result)
         self.assertIn('message', result)
 
-    @patch('src.handlers.volume_handler.restore_headphone_volume')
+    @patch('configurator.handlers.volume_handler.restore_headphone_volume')
     def test_restore_volume_response_format(self, mock_restore):
         """Verify restore volume response has required fields"""
         mock_restore.return_value = True
@@ -472,7 +471,7 @@ class TestVolumeHandlerEdgeCases(unittest.TestCase):
         """Create handler"""
         self.handler = VolumeHandler()
 
-    @patch('src.handlers.volume_handler.get_available_headphone_controls')
+    @patch('configurator.handlers.volume_handler.get_available_headphone_controls')
     def test_list_controls_many(self, mock_get_controls):
         """Test listing many headphone controls"""
         controls = [f'Control{i}' for i in range(10)]
@@ -483,8 +482,8 @@ class TestVolumeHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['count'], 10)
 
-    @patch('src.handlers.volume_handler.request')
-    @patch('src.handlers.volume_handler.set_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.set_headphone_volume')
     def test_set_volume_with_extra_params(self, mock_set_volume, mock_request):
         """Test setting volume ignores extra parameters"""
         mock_request.get_json.return_value = {
@@ -499,7 +498,7 @@ class TestVolumeHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['volume'], 50)
 
-    @patch('src.handlers.volume_handler.get_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')                                                                                                                                                                                                                                                                                     .handlers.volume_handler.get_headphone_volume')
     def test_get_volume_fractional_input(self, mock_get_volume):
         """Test getting volume handles fractional values from backend"""
         mock_get_volume.return_value = (75.5, 'Headphone')
@@ -509,8 +508,8 @@ class TestVolumeHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result['data']['volume'], 75)
 
-    @patch('src.handlers.volume_handler.request')
-    @patch('src.handlers.volume_handler.set_headphone_volume')
+    @patch('configurator.handlers.volume_handler.request')
+    @patch('configurator.handlers.volume_handler.set_headphone_volume')
     def test_set_volume_string_integer(self, mock_set_volume, mock_request):
         """Test setting volume with string that can be converted to int"""
         mock_request.get_json.return_value = {'volume': '60'}

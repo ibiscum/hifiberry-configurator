@@ -35,7 +35,7 @@ flask_mock.Response = MockResponse
 flask_mock.request = MagicMock()
 sys.modules['flask'] = flask_mock
 
-from src.configurator.handlers.system_handler import SystemHandler  # noqa: E402
+from configurator.handlers.system_handler import SystemHandler  # noqa: E402
 
 
 def get_response(result):
@@ -61,8 +61,8 @@ class TestSystemHandlerReboot(unittest.TestCase):
         """Create handler"""
         self.handler = SystemHandler()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_reboot_default_delay(self, mock_thread_class, mock_request):
         """Test reboot with default 5 second delay"""
         mock_request.is_json = False
@@ -77,8 +77,8 @@ class TestSystemHandlerReboot(unittest.TestCase):
         self.assertTrue(result['data']['scheduled'])
         mock_thread.start.assert_called_once()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_reboot_custom_delay(self, mock_thread_class, mock_request):
         """Test reboot with custom delay parameter"""
         mock_request.is_json = True
@@ -93,8 +93,8 @@ class TestSystemHandlerReboot(unittest.TestCase):
         self.assertEqual(result['data']['delay'], 30)
         mock_thread.start.assert_called_once()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_reboot_zero_delay(self, mock_thread_class, mock_request):
         """Test reboot with zero second delay (immediate)"""
         mock_request.is_json = True
@@ -108,8 +108,8 @@ class TestSystemHandlerReboot(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['delay'], 0)
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_reboot_max_delay(self, mock_thread_class, mock_request):
         """Test reboot with maximum 300 second delay"""
         mock_request.is_json = True
@@ -123,7 +123,7 @@ class TestSystemHandlerReboot(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['delay'], 300)
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_reboot_delay_negative(self, mock_request):
         """Test reboot with negative delay (invalid)"""
         mock_request.is_json = True
@@ -135,7 +135,7 @@ class TestSystemHandlerReboot(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('between 0 and 300', result['message'])
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_reboot_delay_too_large(self, mock_request):
         """Test reboot with delay exceeding maximum"""
         mock_request.is_json = True
@@ -147,7 +147,7 @@ class TestSystemHandlerReboot(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('between 0 and 300', result['message'])
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_reboot_delay_invalid_type_string(self, mock_request):
         """Test reboot with delay as string (invalid)"""
         mock_request.is_json = True
@@ -159,7 +159,7 @@ class TestSystemHandlerReboot(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('valid integer', result['message'])
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_reboot_delay_invalid_type_float(self, mock_request):
         """Test reboot with delay as float (invalid)"""
         mock_request.is_json = True
@@ -171,13 +171,13 @@ class TestSystemHandlerReboot(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['delay'], 10)
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_reboot_empty_json(self, mock_request):
         """Test reboot with empty JSON body"""
         mock_request.is_json = True
         mock_request.get_json.return_value = {}
 
-        with patch('src.handlers.system_handler.threading.Thread'):
+        with patch('configurator.handlers.system_handler.threading.Thread'):
             result, status = get_response(self.handler.handle_reboot())
 
         self.assertEqual(status, 200)
@@ -192,8 +192,8 @@ class TestSystemHandlerShutdown(unittest.TestCase):
         """Create handler"""
         self.handler = SystemHandler()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_shutdown_default_delay(self, mock_thread_class, mock_request):
         """Test shutdown with default 5 second delay"""
         mock_request.is_json = False
@@ -208,8 +208,8 @@ class TestSystemHandlerShutdown(unittest.TestCase):
         self.assertTrue(result['data']['scheduled'])
         mock_thread.start.assert_called_once()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_shutdown_custom_delay(self, mock_thread_class, mock_request):
         """Test shutdown with custom delay parameter"""
         mock_request.is_json = True
@@ -224,8 +224,8 @@ class TestSystemHandlerShutdown(unittest.TestCase):
         self.assertEqual(result['data']['delay'], 60)
         mock_thread.start.assert_called_once()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_shutdown_zero_delay(self, mock_thread_class, mock_request):
         """Test shutdown with zero second delay (immediate)"""
         mock_request.is_json = True
@@ -239,8 +239,8 @@ class TestSystemHandlerShutdown(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['delay'], 0)
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_shutdown_max_delay(self, mock_thread_class, mock_request):
         """Test shutdown with maximum 300 second delay"""
         mock_request.is_json = True
@@ -254,7 +254,7 @@ class TestSystemHandlerShutdown(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['delay'], 300)
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_shutdown_delay_negative(self, mock_request):
         """Test shutdown with negative delay (invalid)"""
         mock_request.is_json = True
@@ -266,7 +266,7 @@ class TestSystemHandlerShutdown(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('between 0 and 300', result['message'])
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_shutdown_delay_too_large(self, mock_request):
         """Test shutdown with delay exceeding maximum"""
         mock_request.is_json = True
@@ -278,7 +278,7 @@ class TestSystemHandlerShutdown(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('between 0 and 300', result['message'])
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_shutdown_delay_invalid_type(self, mock_request):
         """Test shutdown with delay as invalid type"""
         mock_request.is_json = True
@@ -290,14 +290,17 @@ class TestSystemHandlerShutdown(unittest.TestCase):
         self.assertEqual(result['status'], 'error')
         self.assertIn('valid integer', result['message'])
 
-    @patch('src.handlers.system_handler.request')
-    def test_shutdown_empty_json(self, mock_request):
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
+    def test_shutdown_empty_json(self, mock_thread_class, mock_request):
         """Test shutdown with empty JSON body"""
         mock_request.is_json = True
         mock_request.get_json.return_value = {}
 
-        with patch('src.handlers.system_handler.threading.Thread'):
-            result, status = get_response(self.handler.handle_shutdown())
+        mock_thread = MagicMock()
+        mock_thread_class.return_value = mock_thread
+
+        result, status = get_response(self.handler.handle_shutdown())
 
         self.assertEqual(status, 200)
         self.assertEqual(result['status'], 'success')
@@ -311,8 +314,8 @@ class TestSystemHandlerThreading(unittest.TestCase):
         """Create handler"""
         self.handler = SystemHandler()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_reboot_thread_is_daemon(self, mock_thread_class, mock_request):
         """Test that reboot thread is created as daemon"""
         mock_request.is_json = False
@@ -326,8 +329,8 @@ class TestSystemHandlerThreading(unittest.TestCase):
         call_kwargs = mock_thread_class.call_args[1]
         self.assertTrue(call_kwargs.get('daemon'))
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_shutdown_thread_is_daemon(self, mock_thread_class, mock_request):
         """Test that shutdown thread is created as daemon"""
         mock_request.is_json = False
@@ -341,8 +344,8 @@ class TestSystemHandlerThreading(unittest.TestCase):
         call_kwargs = mock_thread_class.call_args[1]
         self.assertTrue(call_kwargs.get('daemon'))
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_reboot_thread_started(self, mock_thread_class, mock_request):
         """Test that reboot thread is started"""
         mock_request.is_json = False
@@ -353,8 +356,8 @@ class TestSystemHandlerThreading(unittest.TestCase):
 
         mock_thread.start.assert_called_once()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_shutdown_thread_started(self, mock_thread_class, mock_request):
         """Test that shutdown thread is started"""
         mock_request.is_json = False
@@ -373,8 +376,8 @@ class TestSystemHandlerResponseFormat(unittest.TestCase):
         """Create handler"""
         self.handler = SystemHandler()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_reboot_success_response_format(self, mock_thread_class, mock_request):
         """Verify reboot success response has required fields"""
         mock_request.is_json = False
@@ -389,8 +392,8 @@ class TestSystemHandlerResponseFormat(unittest.TestCase):
         self.assertIn('delay', result['data'])
         self.assertIn('scheduled', result['data'])
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_shutdown_success_response_format(self, mock_thread_class, mock_request):
         """Verify shutdown success response has required fields"""
         mock_request.is_json = False
@@ -405,7 +408,7 @@ class TestSystemHandlerResponseFormat(unittest.TestCase):
         self.assertIn('delay', result['data'])
         self.assertIn('scheduled', result['data'])
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_reboot_error_response_format(self, mock_request):
         """Verify reboot error response has required fields"""
         mock_request.is_json = True
@@ -417,7 +420,7 @@ class TestSystemHandlerResponseFormat(unittest.TestCase):
         self.assertIn('message', result)
         self.assertEqual(result['status'], 'error')
 
-    @patch('src.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.request')
     def test_shutdown_error_response_format(self, mock_request):
         """Verify shutdown error response has required fields"""
         mock_request.is_json = True
@@ -437,8 +440,8 @@ class TestSystemHandlerEdgeCases(unittest.TestCase):
         """Create handler"""
         self.handler = SystemHandler()
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_reboot_null_json_data(self, mock_thread_class, mock_request):
         """Test reboot when get_json returns None"""
         mock_request.is_json = True
@@ -452,8 +455,8 @@ class TestSystemHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['delay'], 5)
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_shutdown_null_json_data(self, mock_thread_class, mock_request):
         """Test shutdown when get_json returns None"""
         mock_request.is_json = True
@@ -467,8 +470,8 @@ class TestSystemHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['delay'], 5)
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_reboot_with_extra_parameters(self, mock_thread_class, mock_request):
         """Test reboot ignores extra parameters in JSON"""
         mock_request.is_json = True
@@ -486,8 +489,8 @@ class TestSystemHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['data']['delay'], 10)
 
-    @patch('src.handlers.system_handler.request')
-    @patch('src.handlers.system_handler.threading.Thread')
+    @patch('configurator.handlers.system_handler.request')
+    @patch('configurator.handlers.system_handler.threading.Thread')
     def test_shutdown_with_extra_parameters(self, mock_thread_class, mock_request):
         """Test shutdown ignores extra parameters in JSON"""
         mock_request.is_json = True

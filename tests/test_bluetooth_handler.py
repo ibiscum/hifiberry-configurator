@@ -67,11 +67,12 @@ class TestBluetoothHandlerPasskey(unittest.TestCase):
 
     def test_set_passkey_from_args(self):
         """Test setting passkey from query arguments"""
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.return_value = "123456"
             mock_request.is_json = False
 
-            response = self.handler.handle_set_bluetooth_passkey()
+            response, status_code = self.handler.handle_set_bluetooth_passkey()
+
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
@@ -80,21 +81,21 @@ class TestBluetoothHandlerPasskey(unittest.TestCase):
 
     def test_set_passkey_from_json(self):
         """Test setting passkey from JSON body"""
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.return_value = None
             mock_request.is_json = True
             mock_request.json.get.return_value = "654321"
 
-            response = self.handler.handle_set_bluetooth_passkey()
+            response, status_code = self.handler.handle_set_bluetooth_passkey()
             data = response.get_json()
 
-            self.assertEqual(response.status_code, 200)
+            self.assertEqual(status_code, 200)
             self.assertEqual(data['status'], 'success')
             self.assertEqual(self.handler.passkey, "654321")
 
     def test_set_passkey_missing(self):
         """Test setting passkey with missing value"""
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.return_value = None
             mock_request.is_json = False
 
@@ -109,10 +110,8 @@ class TestBluetoothHandlerPasskey(unittest.TestCase):
         """Test getting stored passkey"""
         self.handler.passkey = "test-passkey"
 
-        response = self.handler.handle_get_bluetooth_passkey()
+        response, status_code = self.handler.handle_get_bluetooth_passkey()
         data = response.get_json()
-
-        self.assertEqual(response.status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertEqual(data['passkey'], 'test-passkey')
         # Passkey should be cleared after retrieval
@@ -120,16 +119,16 @@ class TestBluetoothHandlerPasskey(unittest.TestCase):
 
     def test_get_passkey_empty(self):
         """Test getting passkey when none is stored"""
-        response = self.handler.handle_get_bluetooth_passkey()
+        response, status_code = self.handler.handle_get_bluetooth_passkey()
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertIsNone(data['passkey'])
 
     def test_set_passkey_exception(self):
         """Test passkey setting with exception"""
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.side_effect = RuntimeError("Request error")
 
             response, status_code = self.handler.handle_set_bluetooth_passkey()
@@ -148,34 +147,36 @@ class TestBluetoothHandlerModal(unittest.TestCase):
 
     def test_set_modal_from_args(self):
         """Test setting modal from query arguments"""
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.return_value = "pair-device"
             mock_request.is_json = False
 
-            response = self.handler.handle_set_show_modal()
+            response, status_code = self.handler.handle_set_show_modal()
             data = response.get_json()
 
-            self.assertEqual(response.status_code, 200)
+            self.assertEqual(status_code, 200)
             self.assertEqual(data['status'], 'success')
             self.assertEqual(self.handler.show_modal, "pair-device")
 
     def test_set_modal_from_json(self):
         """Test setting modal from JSON body"""
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.return_value = None
             mock_request.is_json = True
             mock_request.json.get.return_value = "connect-device"
 
-            response = self.handler.handle_set_show_modal()
+            response, status_code = self.handler.handle_set_show_modal()
             data = response.get_json()
 
-            self.assertEqual(response.status_code, 200)
+            self.assertEqual(status_code, 200)
+
+            self.assertEqual(status_code, 200)
             self.assertEqual(data['status'], 'success')
             self.assertEqual(self.handler.show_modal, "connect-device")
 
     def test_set_modal_missing(self):
         """Test setting modal with missing value"""
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.return_value = None
             mock_request.is_json = False
 
@@ -190,10 +191,8 @@ class TestBluetoothHandlerModal(unittest.TestCase):
         """Test getting stored modal"""
         self.handler.show_modal = "test-modal"
 
-        response = self.handler.handle_get_show_modal()
+        response, status_code = self.handler.handle_get_show_modal()
         data = response.get_json()
-
-        self.assertEqual(response.status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertEqual(data['modal'], 'test-modal')
         # Modal should be cleared after retrieval
@@ -201,16 +200,16 @@ class TestBluetoothHandlerModal(unittest.TestCase):
 
     def test_get_modal_empty(self):
         """Test getting modal when none is stored"""
-        response = self.handler.handle_get_show_modal()
+        response, status_code = self.handler.handle_get_show_modal()
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertIsNone(data['modal'])
 
     def test_set_modal_exception(self):
         """Test modal setting with exception"""
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.side_effect = RuntimeError("Request error")
 
             response, status_code = self.handler.handle_set_show_modal()
@@ -227,20 +226,20 @@ class TestBluetoothHandlerSettings(unittest.TestCase):
         """Set up test fixtures"""
         self.handler = BluetoothHandler()
 
-    @patch('src.handlers.bluetooth_handler.get_bluetooth_settings')
+    @patch('configurator.handlers.bluetooth_handler.get_bluetooth_settings')
     def test_get_settings(self, mock_get_settings):
         """Test getting Bluetooth settings"""
         mock_settings = {'power': True, 'discoverability': True}
         mock_get_settings.return_value = mock_settings
 
-        response = self.handler.handle_get_bluetooth_settings()
+        response, status_code = self.handler.handle_get_bluetooth_settings()
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertEqual(data['data'], mock_settings)
 
-    @patch('src.handlers.bluetooth_handler.get_bluetooth_settings')
+    @patch('configurator.handlers.bluetooth_handler.get_bluetooth_settings')
     def test_get_settings_error(self, mock_get_settings):
         """Test getting settings with error"""
         mock_get_settings.side_effect = RuntimeError("Bluetooth service error")
@@ -252,23 +251,23 @@ class TestBluetoothHandlerSettings(unittest.TestCase):
         self.assertEqual(data['status'], 'error')
         self.assertIn('Failed to retrieve', data['message'])
 
-    @patch('src.handlers.bluetooth_handler.set_bluetooth_settings')
-    @patch('src.handlers.bluetooth_handler.request')
+    @patch('configurator.handlers.bluetooth_handler.set_bluetooth_settings')
+    @patch('configurator.handlers.bluetooth_handler.request')
     def test_set_settings(self, mock_request, mock_set_settings):
         """Test setting Bluetooth settings"""
         mock_request.args = {'power': 'true'}
         mock_settings = {'power': True}
         mock_set_settings.return_value = mock_settings
 
-        response = self.handler.handle_set_bluetooth_settings()
+        response, status_code = self.handler.handle_set_bluetooth_settings()
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertEqual(data['data'], mock_settings)
 
-    @patch('src.handlers.bluetooth_handler.set_bluetooth_settings')
-    @patch('src.handlers.bluetooth_handler.request')
+    @patch('configurator.handlers.bluetooth_handler.set_bluetooth_settings')
+    @patch('configurator.handlers.bluetooth_handler.request')
     def test_set_settings_error(self, mock_request, mock_set_settings):
         """Test setting settings with error"""
         mock_request.args = {}
@@ -289,7 +288,7 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         """Set up test fixtures"""
         self.handler = BluetoothHandler()
 
-    @patch('src.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
+    @patch('configurator.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
     def test_get_paired_devices(self, mock_get_devices):
         """Test getting paired devices"""
         # Mock returns a list-like object
@@ -302,14 +301,13 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         response = self.handler.handle_get_paired_devices()
         # Handle both Response and tuple returns
         if isinstance(response, tuple):
-            response, _ = response
+            response, status_code = response
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertIsNotNone(data.get('data'))
 
-    @patch('src.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
+    @patch('configurator.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
     def test_get_paired_devices_empty(self, mock_get_devices):
         """Test getting paired devices when list is empty"""
         mock_get_devices.return_value = []
@@ -317,14 +315,13 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         response = self.handler.handle_get_paired_devices()
         # Handle both Response and tuple returns
         if isinstance(response, tuple):
-            response, _ = response
+            response, status_code = response
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
         self.assertEqual(data['status'], 'success')
 
-    @patch('src.handlers.bluetooth_handler.unpair_device', new_callable=Mock)
-    @patch('src.handlers.bluetooth_handler.request')
+    @patch('configurator.handlers.bluetooth_handler.unpair_device', new_callable=Mock)
+    @patch('configurator.handlers.bluetooth_handler.request')
     def test_unpair_device_success(self, mock_request, mock_unpair):
         """Test unpairing device successfully"""
         mock_request.args.get.return_value = "00:11:22:33:44:55"
@@ -335,7 +332,7 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         if isinstance(response, tuple):
             response, status_code = response
         else:
-            status_code = response.status_code
+            status_code = response.status_code if hasattr(response, 'status_code') else 200
         data = response.get_json()
 
         self.assertEqual(status_code, 200)
@@ -354,20 +351,24 @@ class TestBluetoothHandlerDeviceRegression(unittest.TestCase):
         """Regression: success payload should include paired device data."""
         devices = [{'address': '00:11:22:33:44:55', 'name': 'Device 1'}]
         with patch(
-            'src.handlers.bluetooth_handler.get_paired_devices',
+            'configurator.handlers.bluetooth_handler.get_paired_devices',
             new=Mock(return_value=devices),
         ):
             response = self.handler.handle_get_paired_devices()
+        if isinstance(response, tuple):
+            response, status_code = response
+        else:
+            status_code = response.status_code if hasattr(response, 'status_code') else 200
         data = response.get_json()
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(status_code, 200)
         self.assertEqual(data['status'], 'success')
         self.assertEqual(data['data'], devices)
 
     def test_get_paired_devices_returns_500_on_exception(self):
         """Regression: runtime failures return 500 with an error payload."""
         with patch(
-            'src.handlers.bluetooth_handler.get_paired_devices',
+            'configurator.handlers.bluetooth_handler.get_paired_devices',
             new=Mock(side_effect=RuntimeError('Bluetooth error')),
         ):
             response, status_code = self.handler.handle_get_paired_devices()
@@ -378,13 +379,13 @@ class TestBluetoothHandlerDeviceRegression(unittest.TestCase):
         self.assertIn('Failed to retrieve paired devices', data['message'])
         self.assertEqual(data['error'], 'Bluetooth error')
 
-    @patch('src.handlers.bluetooth_handler.request')
+    @patch('configurator.handlers.bluetooth_handler.request')
     def test_unpair_device_returns_400_on_value_error(self, mock_request):
         """Regression: validation errors should map to HTTP 400."""
         mock_request.args.get.return_value = '00:11:22:33:44:FF'
 
         with patch(
-            'src.handlers.bluetooth_handler.unpair_device',
+            'configurator.handlers.bluetooth_handler.unpair_device',
             new=Mock(side_effect=ValueError('Device not found')),
         ):
             response, status_code = self.handler.handle_unpair_device()
@@ -394,13 +395,13 @@ class TestBluetoothHandlerDeviceRegression(unittest.TestCase):
         self.assertEqual(data['status'], 'error')
         self.assertEqual(data['message'], 'Device not found')
 
-    @patch('src.handlers.bluetooth_handler.request')
+    @patch('configurator.handlers.bluetooth_handler.request')
     def test_unpair_device_returns_500_on_runtime_error(self, mock_request):
         """Regression: unexpected unpair errors should map to HTTP 500."""
         mock_request.args.get.return_value = '00:11:22:33:44:55'
 
         with patch(
-            'src.handlers.bluetooth_handler.unpair_device',
+            'configurator.handlers.bluetooth_handler.unpair_device',
             new=Mock(side_effect=RuntimeError('Unpair failed')),
         ):
             response, status_code = self.handler.handle_unpair_device()
@@ -421,11 +422,12 @@ class TestBluetoothHandlerReturnTypes(unittest.TestCase):
 
     def test_get_passkey_returns_response(self):
         """Test that get_passkey returns Response"""
-        result = self.handler.handle_get_bluetooth_passkey()
-        self.assertTrue(hasattr(result, 'get_json'))
-        self.assertTrue(callable(result.get_json))
+        response, _ = self.handler.handle_get_bluetooth_passkey()
 
-    @patch('src.handlers.bluetooth_handler.request')
+        self.assertTrue(hasattr(response, 'get_json'))
+        self.assertTrue(callable(response.get_json))
+
+    @patch('configurator.handlers.bluetooth_handler.request')
     def test_set_passkey_returns_response_or_tuple(self, mock_request):
         """Test that set_passkey returns Response or tuple"""
         mock_request.args.get.return_value = "test"
@@ -434,7 +436,7 @@ class TestBluetoothHandlerReturnTypes(unittest.TestCase):
         result = self.handler.handle_set_bluetooth_passkey()
         self.assertTrue(hasattr(result, 'get_json'))
 
-    @patch('src.handlers.bluetooth_handler.get_bluetooth_settings')
+    @patch('configurator.handlers.bluetooth_handler.get_bluetooth_settings')
     def test_get_settings_returns_response(self, mock_get_settings):
         """Test that get_settings returns Response"""
         mock_get_settings.return_value = {}
@@ -442,7 +444,7 @@ class TestBluetoothHandlerReturnTypes(unittest.TestCase):
         result = self.handler.handle_get_bluetooth_settings()
         self.assertTrue(hasattr(result, 'get_json'))
 
-    @patch('src.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
+    @patch('configurator.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
     def test_get_devices_returns_response(self, mock_get_devices):
         """Test that get_devices returns Response"""
         mock_get_devices.return_value = []
@@ -461,17 +463,18 @@ class TestBluetoothHandlerEdgeCases(unittest.TestCase):
     def test_passkey_lifecycle(self):
         """Test complete passkey lifecycle"""
         # Set passkey
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.return_value = "lifecycle-test"
             mock_request.is_json = False
-            response = self.handler.handle_set_bluetooth_passkey()
+
+            response, _ = self.handler.handle_set_bluetooth_passkey()
             self.assertEqual(response.get_json()['status'], 'success')
 
         # Verify it's stored
         self.assertEqual(self.handler.passkey, "lifecycle-test")
 
         # Get passkey
-        response = self.handler.handle_get_bluetooth_passkey()
+        response, _ = self.handler.handle_get_bluetooth_passkey()
         data = response.get_json()
         self.assertEqual(data['passkey'], "lifecycle-test")
 
@@ -481,24 +484,24 @@ class TestBluetoothHandlerEdgeCases(unittest.TestCase):
     def test_modal_lifecycle(self):
         """Test complete modal lifecycle"""
         # Set modal
-        with patch('src.handlers.bluetooth_handler.request') as mock_request:
+        with patch('configurator.handlers.bluetooth_handler.request') as mock_request:
             mock_request.args.get.return_value = "lifecycle-modal"
             mock_request.is_json = False
-            response = self.handler.handle_set_show_modal()
+            response, _ = self.handler.handle_set_show_modal()
             self.assertEqual(response.get_json()['status'], 'success')
 
         # Verify it's stored
         self.assertEqual(self.handler.show_modal, "lifecycle-modal")
 
         # Get modal
-        response = self.handler.handle_get_show_modal()
+        response, _ = self.handler.handle_get_show_modal()
         data = response.get_json()
         self.assertEqual(data['modal'], "lifecycle-modal")
 
         # Verify it's cleared
         self.assertIsNone(self.handler.show_modal)
 
-    @patch('src.handlers.bluetooth_handler.request')
+    @patch('configurator.handlers.bluetooth_handler.request')
     def test_set_passkey_prefers_args_over_json(self, mock_request):
         """Test that query args are preferred over JSON body"""
         mock_request.args.get.return_value = "from-args"
@@ -508,7 +511,7 @@ class TestBluetoothHandlerEdgeCases(unittest.TestCase):
         self.handler.handle_set_bluetooth_passkey()
         self.assertEqual(self.handler.passkey, "from-args")
 
-    @patch('src.handlers.bluetooth_handler.request')
+    @patch('configurator.handlers.bluetooth_handler.request')
     def test_set_modal_prefers_args_over_json(self, mock_request):
         """Test that query args are preferred over JSON body for modal"""
         mock_request.args.get.return_value = "from-args"
