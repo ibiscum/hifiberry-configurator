@@ -11,7 +11,7 @@ This document describes the execution flow of [src/network.py](src/network.py), 
 
 CLI entrypoint:
 
-- `config-network` -> `configurator.network:main` in [setup.py](setup.py)
+- `config-network` -> `configurator.network:main` in [pyproject.toml](pyproject.toml) `[project.scripts]`
 
 API entrypoint:
 

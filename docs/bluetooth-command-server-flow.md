@@ -18,7 +18,7 @@ It covers:
 - BLE provisioning HTTP handler: src/handlers/ble_handler.py
 - BLE provisioning runtime: src/ble_provisioning.py
 - systemd unit: systemd/ble-provisioning.service
-- CLI entrypoint mapping: setup.py (config-ble-provision)
+- CLI entrypoint mapping: pyproject scripts (config-ble-provision)
 
 ## Server Initialization Flow
 
@@ -156,7 +156,7 @@ Unit behavior (systemd/ble-provisioning.service):
 - ExecStartPre: /usr/bin/config-ble-provision --check-network
 - ExecStart: /usr/bin/config-ble-provision --serve
 
-CLI mapping is provided via setup.py console_scripts:
+CLI mapping is provided via `pyproject.toml` `[project.scripts]`:
 
 - config-ble-provision -> configurator.ble_provisioning:main
 

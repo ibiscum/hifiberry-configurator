@@ -89,8 +89,8 @@ def get_current_volume(card_index: Optional[int], control_name: Optional[str]) -
     else:
         # Fallback to subprocess
         try:
-            cmd = f"amixer -c {card_index} get '{control_name}'"
-            output = subprocess.check_output(cmd, shell=True, text=True)
+            cmd = ['amixer', '-c', str(card_index), 'get', control_name]
+            output = subprocess.check_output(cmd, text=True)
 
             # Look for percentage in the output, e.g. [80%]
             import re
@@ -146,20 +146,18 @@ def set_volume(card_index: Optional[int], control_name: Optional[str], volume_va
     else:
         # Fallback to subprocess
         try:
-            # Check if the value is numeric (dB) or should be treated as percentage
-            try:
-                float_value = float(volume_value)
-                # If it's a float that's not a whole number, treat as dB
-                if float_value != int(float_value):
-                    cmd = f"amixer -c {card_index} set '{control_name}' {volume_value}dB"
-                else:
-                    cmd = f"amixer -c {card_index} set '{control_name}' {volume_value}%"
-            except ValueError:
-                # If conversion fails, just pass the value as-is
-                cmd = f"amixer -c {card_index} set '{control_name}' {volume_value}"
+            float_value = float(volume_value)
+            if float_value != int(float_value):
+                volume_arg = f"{volume_value}dB"
+            else:
+                volume_arg = f"{int(float_value)}%"
 
-            subprocess.check_output(cmd, shell=True, text=True)
+            cmd = ['amixer', '-c', str(card_index), 'set', control_name, volume_arg]
+            subprocess.check_output(cmd, text=True)
             return True
+        except ValueError:
+            logging.error(f"Invalid volume value: {volume_value}")
+            return False
         except subprocess.CalledProcessError as e:
             logging.error(f"Error setting volume: {str(e)}")
             return False
@@ -335,8 +333,7 @@ def is_pipewire_available() -> bool:
     else:
         # Fallback to subprocess
         try:
-            cmd = "amixer get Master"
-            output = subprocess.check_output(cmd, shell=True, text=True)
+            output = subprocess.check_output(['amixer', 'get', 'Master'], text=True)
             return "Simple mixer control 'Master'" in output
         except subprocess.CalledProcessError:
             return False
@@ -371,8 +368,7 @@ def get_pipewire_volume(control_name: str) -> Optional[str]:
     else:
         # Fallback to subprocess
         try:
-            cmd = f"amixer get '{control_name}'"
-            output = subprocess.check_output(cmd, shell=True, text=True)
+            output = subprocess.check_output(['amixer', 'get', control_name], text=True)
 
             # Look for percentage in the output, e.g. [80%]
             import re
@@ -421,9 +417,16 @@ def set_pipewire_volume(control_name: str, volume_value: str) -> bool:
     else:
         # Fallback to subprocess
         try:
-            cmd = f"amixer set '{control_name}' {volume_value}%"
-            subprocess.check_output(cmd, shell=True, text=True)
+            volume_int = int(float(volume_value))
+            volume_int = max(0, min(100, volume_int))
+            subprocess.check_output(
+                ['amixer', 'set', control_name, f'{volume_int}%'],
+                text=True,
+            )
             return True
+        except ValueError:
+            logging.error(f"Invalid PipeWire volume value: {volume_value}")
+            return False
         except subprocess.CalledProcessError as e:
             logging.error(f"Error setting PipeWire volume: {str(e)}")
             return False
@@ -653,10 +656,10 @@ def list_available_controls(card_index: Optional[int] = None) -> List[str]:
     else:
         try:
             if card_index is not None:
-                cmd = f"amixer -c {card_index} scontrols"
+                cmd = ['amixer', '-c', str(card_index), 'scontrols']
             else:
-                cmd = "amixer scontrols"
-            output = subprocess.check_output(cmd, shell=True, text=True)
+                cmd = ['amixer', 'scontrols']
+            output = subprocess.check_output(cmd, text=True)
 
             import re
             matches = re.findall(r"Simple mixer control '([^']+)'", output)
@@ -673,11 +676,10 @@ def main() -> int:
                         format='%(levelname)s: %(message)s',
                         stream=sys.stderr)
 
-    # Create the parser
     parser = argparse.ArgumentParser(
         description='Store and restore ALSA volume settings (including PipeWire virtual controls and headphone volume) in the configuration database')
 
-    # Add store/restore group
+    # Add mutually exclusive operation group
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--store', action='store_true',
                       help='Store the current volume settings (both physical card, headphone, and PipeWire virtual controls)')
@@ -696,11 +698,12 @@ def main() -> int:
     group.add_argument('--list-headphone', action='store_true',
                       help='List available headphone volume controls')
 
+    # Add debug option to list available controls
+    group.add_argument('--list-controls', action='store_true',
+                      help='List available ALSA mixer controls and exit')
+
     # Add verbosity option
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
-
-    # Add debug option to list available controls
-    parser.add_argument('--list-controls', action='store_true', help='List available ALSA mixer controls and exit')
 
     # Parse arguments
     args = parser.parse_args()
@@ -743,9 +746,10 @@ def main() -> int:
             print("Available headphone volume controls:")
             for control in headphone_controls:
                 print(f"  - {control}")
+            return 0
         else:
-            print("No headphone volume controls available on this sound card")
-        return 0
+            print("Error: No headphone volume controls available on this sound card", file=sys.stderr)
+            return 1
 
     if args.get_headphone:
         volume, control_name = get_headphone_volume()

@@ -9,6 +9,27 @@ config-volume \- volume control and management tool
 manages audio volume settings for HiFiBerry devices, including support for PipeWire virtual controls and automatic volume restoration.
 .SH OPTIONS
 .TP
+.B \-\-store
+Store current physical card, headphone, and PipeWire virtual control volumes
+.TP
+.B \-\-restore
+Restore stored physical card, headphone, and PipeWire virtual control volumes
+.TP
+.B \-\-store\-headphone
+Store only the current headphone volume setting
+.TP
+.B \-\-restore\-headphone
+Restore only the stored headphone volume setting
+.TP
+.B \-\-get\-headphone
+Print current headphone volume and control name
+.TP
+.B \-\-set\-headphone \fIVOLUME\fR
+Set headphone volume (integer percent or dB-compatible numeric value)
+.TP
+.B \-\-list\-headphone
+List available headphone volume controls
+.TP
 .B \-v, \-\-verbose
 Enable verbose output for debugging
 .TP
@@ -28,6 +49,18 @@ Direct mixer control access using Python ALSA API
 .TP
 List available mixer controls:
 .B config-volume \-\-list\-controls
+.TP
+Store all volume settings:
+.B config-volume \-\-store
+.TP
+Restore all volume settings:
+.B config-volume \-\-restore
+.TP
+Get current headphone volume:
+.B config-volume \-\-get\-headphone
+.TP
+Set headphone volume:
+.B config-volume \-\-set\-headphone 70
 .TP
 Enable verbose output:
 .B config-volume \-\-verbose

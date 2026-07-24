@@ -6,7 +6,7 @@ This document describes the execution flow of [src/cmdline.py](src/cmdline.py), 
 
 ## Entry Point
 
-- Console script mapping in [setup.py](setup.py):
+- Console script mapping in [pyproject.toml](pyproject.toml) `[project.scripts]`:
   - `config-cmdline -> configurator.cmdline:main`
 
 Run examples:

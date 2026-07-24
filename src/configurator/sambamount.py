@@ -129,7 +129,7 @@ def read_mount_config(secure: bool = False) -> List[Dict[str, str]]:
     return mounts
 
 
-def read_mount_config_for_display() -> List[Dict[str, str]]:
+def read_mount_config_for_display() -> List[Dict[str, Any]]:
     """
     Read mount configurations from the config database for display / listing.
 
@@ -141,7 +141,7 @@ def read_mount_config_for_display() -> List[Dict[str, str]]:
         List of dictionaries containing non-sensitive mount fields only.
     """
     db = ConfigDB()
-    mounts: List[Dict[str, str]] = []
+    mounts: List[Dict[str, Any]] = []
     index = 1
 
     while True:
@@ -764,7 +764,7 @@ def unmount_smb_share(server: str, share: str) -> bool:
         logger.exception(f"Exception occurred while unmounting {server}/{share}")
         return False
 
-def list_configured_mounts() -> List[Dict[str, str]]:
+def list_configured_mounts() -> List[Dict[str, Any]]:
     """
     List all mounts from the configuration database.
 

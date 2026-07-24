@@ -79,7 +79,7 @@ class SoundcardDetector:
         self.hifiberry_logger.setLevel(logging.INFO)
 
         # Create file handler
-        handler = logging.FileHandler(self.hifiberry_log_file)
+        handler = logging.FileHandler(self.hifiberry_log_file)  # type: ignore[arg-type]
         handler.setLevel(logging.INFO)
 
         # Create formatter with timestamp
@@ -185,7 +185,7 @@ class SoundcardDetector:
         """
         if not self.detected_card:
             return
-        from .soundcard import SOUND_CARD_DEFINITIONS  # type: ignore
+        from configurator.soundcard import SOUND_CARD_DEFINITIONS  # type: ignore
         if self.detected_card in SOUND_CARD_DEFINITIONS:
             return
         for canonical, attrs in SOUND_CARD_DEFINITIONS.items():
@@ -234,7 +234,7 @@ class SoundcardDetector:
             or single card name if only one match, or overlay name if not found
         """
         # Import here to avoid circular imports
-        from src.configurator.soundcard import SOUND_CARD_DEFINITIONS
+        from configurator.soundcard import SOUND_CARD_DEFINITIONS
 
         # Handle overlay names with parameters (e.g., "amp100,automute")
         base_overlay = overlay.split(',')[0] if ',' in overlay else overlay
@@ -294,7 +294,11 @@ class SoundcardDetector:
         """
         logging.info("Detecting HiFiBerry sound card...")
         if self.verbose:
-            logging.info("Detection method order: 1) Config database override, 2) HAT EEPROM, 3) I2C probing, 4) aplay output, 5) DSP detection")
+            logging.info(
+                "Detection method order: 1) Config database override, "
+                "2) config.txt card comment, 3) HAT EEPROM, 4) I2C probing, "
+                "5) aplay output, 6) arecord input, 7) DSP detection"
+            )
 
         if ignore_pin:
             logging.info("ignore_pin=True; skipping ConfigDB and config.txt-comment bypass paths")
@@ -347,7 +351,7 @@ class SoundcardDetector:
             try:
                 hat_info = get_hat_info(verbose=True)  # Enable verbose for detailed error info
                 hat_card = hat_info.get("product")
-                has_hat_info = hat_card is not None
+                has_hat_info = bool(hat_card and str(hat_card).strip())
 
                 if has_hat_info:
                     logging.info(f"HAT detection successful on attempt {attempt + 1}")
@@ -548,7 +552,7 @@ class SoundcardDetector:
 
         # Lazy import: keep the configurator's import chain unchanged for
         # callers that never hit this branch.
-        from src.configurator.soundcard import SOUND_CARD_DEFINITIONS  # type: ignore
+        from configurator.soundcard import SOUND_CARD_DEFINITIONS  # type: ignore
 
         # Check hard-coded factory-firmware checksums first (firmwares we
         # recognise but don't ship as a bundled profile XML).
@@ -621,7 +625,7 @@ class SoundcardDetector:
         Returns the base overlay name (e.g. "adc", the same form
         ``_map_aplay_to_overlay`` returns) or None if no input card matches.
         """
-        from src.configurator.soundcard import SOUND_CARD_DEFINITIONS
+        from configurator.soundcard import SOUND_CARD_DEFINITIONS
 
         output = self._run_command("arecord -l")
         if not output:
@@ -825,7 +829,7 @@ class SoundcardDetector:
 
         # Check if detection is disabled in config.txt (unless --force is used)
         if not force and self.config.is_detection_disabled():
-            from src.configurator.configtxt import HIFIBERRY_DETECTION_DISABLED
+            from configurator.configtxt import HIFIBERRY_DETECTION_DISABLED
             logging.info(f"Detection is disabled in config.txt ({HIFIBERRY_DETECTION_DISABLED}). Use --force to override.")
             return
 
@@ -916,19 +920,23 @@ class SoundcardDetector:
             if "," in dtoverlay_name:
                 parts = dtoverlay_name.split(",")
                 dtoverlay_name = parts[0]
-                params = " ".join(parts[1:])
-                cmd = f"dtoverlay {dtoverlay_name} {params}"
+                cmd = ["dtoverlay", dtoverlay_name, *parts[1:]]
             else:
-                cmd = f"dtoverlay {dtoverlay_name}"
+                cmd = ["dtoverlay", dtoverlay_name]
 
-            logging.info(f"Loading overlay directly: {cmd}")
-            result = self._run_command(cmd)
+            logging.info(f"Loading overlay directly: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
 
-            if result == "" or "dtoverlay" in result.lower():
-                # dtoverlay typically doesn't output anything on success
+            if result.returncode == 0:
+                # dtoverlay typically has an empty stdout on success
                 logging.info(f"Successfully loaded overlay: {dtoverlay_name}")
             else:
-                logging.warning(f"dtoverlay command output: {result}")
+                error_output = (result.stderr or result.stdout or "").strip()
+                if not error_output:
+                    error_output = "no output"
+                logging.error(
+                    f"Failed to load overlay {dtoverlay_name}: {error_output}"
+                )
 
         except Exception as e:
             logging.error(f"Failed to load overlay {overlay_name}: {str(e)}")

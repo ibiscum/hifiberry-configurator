@@ -6,7 +6,7 @@ This document describes the execution flow of [src/hattools.py](src/hattools.py)
 
 ## Entry Point
 
-- Console script mapping in [setup.py](setup.py):
+- Console script mapping in [pyproject.toml](pyproject.toml) `[project.scripts]`:
   - `config-hattools -> configurator.hattools:main`
 
 Run examples:

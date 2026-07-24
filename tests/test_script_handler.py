@@ -13,7 +13,7 @@ import shutil
 import sys
 import tempfile
 import unittest
-from typing import Any, Tuple
+from typing import Any, Dict, Optional, Tuple
 from unittest.mock import Mock, patch, MagicMock
 
 # sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -22,12 +22,12 @@ from unittest.mock import Mock, patch, MagicMock
 class MockResponse:  # pylint: disable=too-few-public-methods
     """Mock Flask Response object"""
 
-    def __init__(self, json_data=None, status_code=200):
-        self.json_data = json_data
+    def __init__(self, json_data: Optional[Dict[str, Any]] = None, status_code: int = 200):
+        self.json_data: Dict[str, Any] = json_data if json_data is not None else {}
         self.status_code = status_code
         self.headers = {}
 
-    def get_json(self):
+    def get_json(self) -> Dict[str, Any]:
         """Return the mocked JSON payload."""
         return self.json_data
 
@@ -219,8 +219,8 @@ class TestScriptHandlerExecution(unittest.TestCase):
         handler = ScriptHandler(config_file=self.config_file)
         response, status_code = unwrap_response(handler.handle_execute_script("unknown"))
         self.assertEqual(status_code, 404)
-        self.assertEqual(response[0].json_data["status"], "error")
-        self.assertEqual(response[0].json_data["error"], "script_not_found")
+        self.assertEqual(response.json_data["status"], "error")
+        self.assertEqual(response.json_data["error"], "script_not_found")
 
     def test_execute_script_no_path(self):
         """Return 500 when script has no path configured"""
@@ -234,7 +234,7 @@ class TestScriptHandlerExecution(unittest.TestCase):
         handler = ScriptHandler(config_file=self.config_file)
         response, status_code = unwrap_response(handler.handle_execute_script("broken"))
         self.assertEqual(status_code, 500)
-        self.assertEqual(response[0].json_data["error"], "script_path_missing")
+        self.assertEqual(response.json_data["error"], "script_path_missing")
 
     def test_execute_script_path_not_found(self):
         """Return 404 when script path doesn't exist"""
@@ -250,7 +250,7 @@ class TestScriptHandlerExecution(unittest.TestCase):
         handler = ScriptHandler(config_file=self.config_file)
         response, status_code = unwrap_response(handler.handle_execute_script("missing"))
         self.assertEqual(status_code, 404)
-        self.assertEqual(response[0].json_data["error"], "script_path_not_found")
+        self.assertEqual(response.json_data["error"], "script_path_not_found")
 
     def test_execute_script_not_executable(self):
         """Return 403 when script is not executable"""
@@ -270,7 +270,7 @@ class TestScriptHandlerExecution(unittest.TestCase):
         handler = ScriptHandler(config_file=self.config_file)
         response, status_code = unwrap_response(handler.handle_execute_script("noexec"))
         self.assertEqual(status_code, 403)
-        self.assertEqual(response[0].json_data["error"], "script_not_executable")
+        self.assertEqual(response.json_data["error"], "script_not_executable")
 
     def test_execute_script_sync_success(self):
         """Execute script synchronously and return output"""

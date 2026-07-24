@@ -6,7 +6,7 @@ This document describes the execution flow of [src/avahi.py](src/avahi.py), expo
 
 ## Entry Point
 
-- Console script mapping in [setup.py](setup.py):
+- Console script mapping in [pyproject.toml](pyproject.toml) `[project.scripts]`:
   - `config-avahi -> configurator.avahi:main`
 
 Run examples:

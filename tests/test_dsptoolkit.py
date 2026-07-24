@@ -13,15 +13,11 @@ Tests cover:
 
 import unittest
 import json
-import sys
 from unittest.mock import patch, MagicMock
 from io import StringIO
 
-# Add src directory to path for imports
-sys.path.insert(0, '/home/ulf/data/configurator')
-
 from configurator.dsptoolkit import (
-    DSPToolkit, detect_dsp, get_detected_dsp_name, is_dsp_detected,
+    DSPToolkit, detect_dsp, get_detected_dsp_name, is_dsp_detected, main,
     DEFAULT_DSP_HOST, DEFAULT_DSP_PORT, DEFAULT_TIMEOUT, VALID_DSP_STATUSES
 )
 
@@ -61,7 +57,7 @@ class TestDSPDetection(unittest.TestCase):
         self.toolkit = DSPToolkit()
         self.valid_response = {"detected_dsp": "ADAU14xx", "status": "detected"}
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_success(self, mock_get):
         """Test successful DSP detection"""
         mock_response = MagicMock()
@@ -76,7 +72,7 @@ class TestDSPDetection(unittest.TestCase):
             timeout=DEFAULT_TIMEOUT
         )
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_not_detected(self, mock_get):
         """Test DSP detection when DSP is not present"""
         mock_response = MagicMock()
@@ -85,11 +81,11 @@ class TestDSPDetection(unittest.TestCase):
         mock_get.return_value = mock_response
 
         result = self.toolkit.detect_dsp()
-        self.assertIsNotNone(result)
-        assert result is not None
+        if result is None:
+            self.fail("Expected DSP response object")
         self.assertEqual(result.get("status"), "not_detected")
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_connection_error(self, mock_get):
         """Test DSP detection with connection error"""
         import requests
@@ -98,7 +94,7 @@ class TestDSPDetection(unittest.TestCase):
         result = self.toolkit.detect_dsp()
         self.assertIsNone(result)
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_timeout(self, mock_get):
         """Test DSP detection with request timeout"""
         import requests
@@ -107,7 +103,7 @@ class TestDSPDetection(unittest.TestCase):
         result = self.toolkit.detect_dsp()
         self.assertIsNone(result)
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_invalid_json(self, mock_get):
         """Test DSP detection with invalid JSON response"""
         mock_response = MagicMock()
@@ -116,9 +112,9 @@ class TestDSPDetection(unittest.TestCase):
         mock_get.return_value = mock_response
 
         result = self.toolkit.detect_dsp()
-        self.assertIsNone(result)
+        self.assertEqual(result, {"status": "error"})
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_http_error(self, mock_get):
         """Test DSP detection with HTTP error status"""
         mock_response = MagicMock()
@@ -126,9 +122,9 @@ class TestDSPDetection(unittest.TestCase):
         mock_get.return_value = mock_response
 
         result = self.toolkit.detect_dsp()
-        self.assertIsNone(result)
+        self.assertEqual(result, {"status": "error"})
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_404_not_found(self, mock_get):
         """Test DSP detection with 404 response"""
         mock_response = MagicMock()
@@ -138,7 +134,7 @@ class TestDSPDetection(unittest.TestCase):
         result = self.toolkit.detect_dsp()
         self.assertIsNone(result)
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_request_exception(self, mock_get):
         """Test DSP detection with generic request exception"""
         import requests
@@ -147,7 +143,7 @@ class TestDSPDetection(unittest.TestCase):
         result = self.toolkit.detect_dsp()
         self.assertIsNone(result)
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_empty_response(self, mock_get):
         """Test DSP detection with empty JSON response"""
         mock_response = MagicMock()
@@ -348,7 +344,6 @@ class TestMainCommandLine(unittest.TestCase):
     @patch('sys.argv', ['dsptoolkit', '--name-only'])
     def test_main_name_only_detected(self, mock_detect):
         """Test main with --name-only when DSP is detected"""
-        from configurator.dsptoolkit import main
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -360,7 +355,6 @@ class TestMainCommandLine(unittest.TestCase):
     @patch('sys.argv', ['dsptoolkit', '--name-only'])
     def test_main_name_only_not_detected(self, mock_detect):
         """Test main with --name-only when DSP is not detected"""
-        from configurator.dsptoolkit import main
         mock_detect.return_value = None
 
         result = main()
@@ -370,7 +364,6 @@ class TestMainCommandLine(unittest.TestCase):
     @patch('sys.argv', ['dsptoolkit', '--status-only'])
     def test_main_status_only_detected(self, mock_detect):
         """Test main with --status-only when DSP is detected"""
-        from configurator.dsptoolkit import main
         mock_detect.return_value = {"status": "detected"}
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -382,7 +375,6 @@ class TestMainCommandLine(unittest.TestCase):
     @patch('sys.argv', ['dsptoolkit', '--status-only'])
     def test_main_status_only_not_detected(self, mock_detect):
         """Test main with --status-only when DSP is not detected"""
-        from configurator.dsptoolkit import main
         mock_detect.return_value = {"status": "not_detected"}
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -394,7 +386,6 @@ class TestMainCommandLine(unittest.TestCase):
     @patch('sys.argv', ['dsptoolkit', '--json'])
     def test_main_json_output(self, mock_detect):
         """Test main with --json output"""
-        from configurator.dsptoolkit import main
         expected = {"detected_dsp": "ADAU14xx", "status": "detected"}
         mock_detect.return_value = expected
 
@@ -408,7 +399,6 @@ class TestMainCommandLine(unittest.TestCase):
     @patch('sys.argv', ['dsptoolkit', '--json'])
     def test_main_json_unavailable(self, mock_detect):
         """Test main with --json when service is unavailable"""
-        from configurator.dsptoolkit import main
         mock_detect.return_value = None
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -418,10 +408,21 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(output_json.get("status"), "unavailable")
 
     @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('sys.argv', ['dsptoolkit', '--json'])
+    def test_main_json_error_status(self, mock_detect):
+        """Test main with --json when service returns error status."""
+        mock_detect.return_value = {"status": "error"}
+
+        with patch('sys.stdout', new=StringIO()) as fake_out:
+            result = main()
+            self.assertEqual(result, 1)
+            output_json = json.loads(fake_out.getvalue())
+            self.assertEqual(output_json.get("status"), "error")
+
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
     @patch('sys.argv', ['dsptoolkit'])
     def test_main_default_output_detected(self, mock_detect):
         """Test main with default output when DSP is detected"""
-        from configurator.dsptoolkit import main
         mock_detect.return_value = {"detected_dsp": "ADAU14xx", "status": "detected"}
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -433,7 +434,6 @@ class TestMainCommandLine(unittest.TestCase):
     @patch('sys.argv', ['dsptoolkit'])
     def test_main_default_output_unavailable(self, mock_detect):
         """Test main with default output when service is unavailable"""
-        from configurator.dsptoolkit import main
         mock_detect.return_value = None
 
         with patch('sys.stdout', new=StringIO()) as fake_out:
@@ -445,7 +445,6 @@ class TestMainCommandLine(unittest.TestCase):
     @patch('sys.argv', ['dsptoolkit', '--host', '10.0.0.1', '--port', '8080', '--timeout', '20.0'])
     def test_main_custom_parameters(self, mock_toolkit_class):
         """Test main with custom host/port/timeout parameters"""
-        from configurator.dsptoolkit import main
         mock_instance = MagicMock()
         mock_toolkit_class.return_value = mock_instance
         mock_instance.detect_dsp.return_value = {"status": "detected"}
@@ -463,7 +462,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         """Set up test fixtures"""
         self.toolkit = DSPToolkit()
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_large_timeout(self, mock_get):
         """Test DSP detection with very large timeout value"""
         toolkit = DSPToolkit(timeout=1000.0)
@@ -475,7 +474,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         result = toolkit.detect_dsp()
         self.assertIsNotNone(result)
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_special_characters_in_response(self, mock_get):
         """Test DSP detection with special characters in response"""
         mock_response = MagicMock()
@@ -487,11 +486,11 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         mock_get.return_value = mock_response
 
         result = self.toolkit.detect_dsp()
-        self.assertIsNotNone(result)
-        assert result is not None
+        if result is None:
+            self.fail("Expected DSP response object")
         self.assertIn("detected_dsp", result)
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_extra_fields_in_response(self, mock_get):
         """Test DSP detection with extra fields in response"""
         mock_response = MagicMock()
@@ -505,11 +504,11 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         mock_get.return_value = mock_response
 
         result = self.toolkit.detect_dsp()
-        self.assertIsNotNone(result)
-        assert result is not None
+        if result is None:
+            self.fail("Expected DSP response object")
         self.assertEqual(len(result), 4)
 
-    @patch('requests.get')
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_numeric_status_code(self, mock_get):
         """Test DSP detection with numeric status code boundary"""
         for status_code in [199, 201, 299]:

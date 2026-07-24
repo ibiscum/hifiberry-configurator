@@ -58,7 +58,8 @@ class DSPToolkit:
         Detect DSP hardware by querying the DSP service
 
         Returns:
-            Dictionary with DSP detection information, or None if detection fails
+            Dictionary with DSP detection information, or None when service
+            is unavailable or cannot be reached.
             Expected format: {"detected_dsp": "ADAU14xx", "status": "detected"}
         """
         try:
@@ -76,9 +77,11 @@ class DSPToolkit:
                     return dsp_info
                 except json.JSONDecodeError as e:
                     logging.error(f"Failed to parse DSP detection response as JSON: {e}")
-                    return None
+                    return {"status": "error"}
             else:
                 logging.warning(f"DSP service returned status code {response.status_code}")
+                if response.status_code >= 500:
+                    return {"status": "error"}
                 return None
 
         except requests.exceptions.ConnectionError:
@@ -225,7 +228,8 @@ def main() -> int:
         dsp_info = toolkit.detect_dsp()
         if dsp_info:
             print(json.dumps(dsp_info, indent=2))
-            return 0
+            status = toolkit._normalize_status(dsp_info.get("status"))
+            return 0 if status == "detected" else 1
         else:
             print(json.dumps({"status": "unavailable"}, indent=2))
             return 1

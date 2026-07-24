@@ -15,7 +15,7 @@ This document describes the execution flow of [src/hostconfig.py](src/hostconfig
 
 Note:
 
-- There is currently no dedicated `config-*` console script mapping for this module in [setup.py](setup.py).
+- There is currently no dedicated `config-*` console script mapping for this module in [pyproject.toml](pyproject.toml) `[project.scripts]`.
 - API hostname routes flow through [src/handlers/hostname_handler.py](src/handlers/hostname_handler.py), which imports `set_hostname_with_hosts_update` from this module.
 
 ## High-Level Flow

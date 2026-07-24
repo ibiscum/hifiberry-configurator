@@ -15,12 +15,12 @@ It is intended as an architecture map for debugging and onboarding.
 
 ### Service startup
 
-- `config-server` starts the Flask/Waitress API service (entrypoint in setup.py).
+- `config-server` starts the Flask/Waitress API service (entrypoint in pyproject scripts).
 - `ConfigAPIServer` in src/server.py creates all handlers during initialization.
 
 ### CLI commands
 
-Console scripts are registered in setup.py and map to module `main()` functions, for example:
+Console scripts are registered in pyproject scripts and map to module `main()` functions, for example:
 
 - `config-server` -> configurator.server:main
 - `config-ble-provision` -> configurator.ble_provisioning:main
@@ -52,16 +52,16 @@ flowchart LR
 | SMB endpoints | src/server.py | src/handlers/smb_handler.py, src/sambaclient.py, src/sambamount.py |
 | Bluetooth endpoints | src/server.py | src/handlers/bluetooth_handler.py, src/bluetooth.py |
 | BLE provisioning endpoints | src/server.py | src/handlers/ble_handler.py |
-| BLE runtime service | systemd/ble-provisioning.service | src/ble_provisioning.py, setup.py |
-| ALSA/asound command | setup.py (`config-asoundconf`) | src/asoundconf.py |
-| HAT EEPROM info command | setup.py (`config-hattools`) | src/hattools.py, src/systeminfo.py |
+| BLE runtime service | systemd/ble-provisioning.service | src/ble_provisioning.py, pyproject scripts |
+| ALSA/asound command | pyproject scripts (`config-asoundconf`) | src/asoundconf.py |
+| HAT EEPROM info command | pyproject scripts (`config-hattools`) | src/hattools.py, src/systeminfo.py |
 | Hostname backend module | src/handlers/hostname_handler.py | src/hostconfig.py, src/hostname_utils.py |
 | Hostname utilities module | src/handlers/hostname_handler.py, src/systeminfo.py | src/hostname_utils.py, src/hostconfig.py |
 | I2C device scan backend | src/handlers/i2c_handler.py | src/i2c.py |
-| Network configuration command/api | setup.py (`config-network`), src/handlers/network_handler.py | src/network.py, src/cmdline.py |
-| config.txt command | setup.py (`config-configtxt`) | src/configtxt.py |
-| cmdline kernel params command | setup.py (`config-cmdline`) | src/cmdline.py |
-| DSP toolkit utility | src/dsptoolkit.py | src/soundcard_detector.py |
+| Network configuration command/api | pyproject scripts (`config-network`), src/handlers/network_handler.py | src/network.py, src/cmdline.py |
+| config.txt command | pyproject scripts (`config-configtxt`) | src/configtxt.py |
+| cmdline kernel params command | pyproject scripts (`config-cmdline`) | src/cmdline.py |
+| DSP toolkit utility | src/configurator/dsptoolkit.py | src/configurator/soundcard_detector.py |
 | config key/settings endpoints | src/server.py | src/configdb.py, src/settings_manager.py |
 
 ## High-Impact Command Flows
@@ -165,7 +165,7 @@ Related runtime:
 
 Entry point:
 
-- `config-asoundconf` -> `configurator.asoundconf:main` (setup.py)
+- `config-asoundconf` -> `configurator.asoundconf:main` (pyproject scripts)
 
 Execution path:
 
@@ -192,7 +192,7 @@ Notes:
 
 Entry point:
 
-- `config-cmdline` -> `configurator.cmdline:main` (setup.py)
+- `config-cmdline` -> `configurator.cmdline:main` (pyproject scripts)
 
 Execution path:
 
@@ -221,7 +221,7 @@ Notes:
 
 Entry point:
 
-- `config-configtxt` -> `configurator.configtxt:main` (setup.py)
+- `config-configtxt` -> `configurator.configtxt:main` (pyproject scripts)
 
 Execution path:
 
@@ -246,8 +246,9 @@ Notes:
 
 Entry point:
 
-- module API in `src/dsptoolkit.py`
-- CLI `main()` in `src/dsptoolkit.py` (no `config-*` console script mapping in setup.py)
+- module API in `src/configurator/dsptoolkit.py`
+- CLI `main()` in `src/configurator/dsptoolkit.py`
+- generated command `config-dsptoolkit` -> `configurator.dsptoolkit:main` (from `pyproject.toml`)
 
 Execution path:
 
@@ -272,7 +273,7 @@ Notes:
 
 Entry point:
 
-- `config-hattools` -> `configurator.hattools:main` (setup.py)
+- `config-hattools` -> `configurator.hattools:main` (pyproject scripts)
 
 Execution path:
 
@@ -373,7 +374,7 @@ Notes:
 
 Entry points:
 
-- CLI `config-network` -> `configurator.network:main` in `setup.py`
+- CLI `config-network` -> `configurator.network:main` in `pyproject.toml` `[project.scripts]`
 - API route `/api/v1/network` -> `NetworkHandler.handle_get_network_config()`
 
 Execution path:

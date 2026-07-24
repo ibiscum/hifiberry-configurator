@@ -8,6 +8,7 @@ configuration storage/retrieval, and caching.
 import unittest
 from unittest.mock import patch, MagicMock
 from subprocess import CalledProcessError
+from io import StringIO
 
 from configurator.volume import (
     get_cached_card_index,
@@ -24,6 +25,7 @@ from configurator.volume import (
     store_headphone_volume,
     restore_headphone_volume,
     list_available_controls,
+    main,
 )
 
 
@@ -151,8 +153,9 @@ class TestSetVolume(unittest.TestCase):
 
         self.assertTrue(result)
         mock_subprocess.assert_called_once()
-        assert 'amixer' in mock_subprocess.call_args[0][0]
-        assert '75%' in mock_subprocess.call_args[0][0]
+        call_cmd = mock_subprocess.call_args[0][0]
+        self.assertEqual(call_cmd[:4], ['amixer', '-c', '0', 'set'])
+        self.assertEqual(call_cmd[-1], '75%')
 
     @patch('configurator.volume.alsa_available', False)
     @patch('configurator.volume.subprocess.check_output')
@@ -162,8 +165,8 @@ class TestSetVolume(unittest.TestCase):
 
         self.assertTrue(result)
         call_cmd = mock_subprocess.call_args[0][0]
-        assert 'amixer' in call_cmd
-        assert 'dB' in call_cmd
+        self.assertEqual(call_cmd[:4], ['amixer', '-c', '0', 'set'])
+        self.assertEqual(call_cmd[-1], '5.5dB')
 
     @patch('configurator.volume.alsa_available', False)
     @patch('configurator.volume.subprocess.check_output')
@@ -524,6 +527,40 @@ class TestEdgeCases(unittest.TestCase):
         result = get_current_volume(0, 'Line In')
 
         self.assertEqual(result, '50')
+
+
+class TestVolumeCliRegression(unittest.TestCase):
+    """CLI behavior regression tests for volume main()."""
+
+    @patch('sys.argv', ['config-volume', '--list-controls'])
+    @patch('configurator.volume.list_available_controls')
+    @patch('configurator.volume.get_cached_card_index')
+    def test_main_list_controls_standalone(self, mock_card_index, mock_list_controls):
+        """--list-controls should work as a standalone operation."""
+        mock_card_index.return_value = 0
+        mock_list_controls.side_effect = [['Master'], ['Master', 'Capture']]
+
+        with patch('sys.stdout', new=StringIO()):
+            result = main()
+
+        self.assertEqual(result, 0)
+
+    @patch('sys.argv', ['config-volume', '--list-controls', '--store'])
+    def test_main_rejects_conflicting_operations(self):
+        """Mutually exclusive operations should be rejected by argparse."""
+        with self.assertRaises(SystemExit):
+            main()
+
+    @patch('sys.argv', ['config-volume', '--list-headphone'])
+    @patch('configurator.volume.get_available_headphone_controls')
+    def test_main_list_headphone_no_controls_returns_failure(self, mock_controls):
+        """No headphone controls should now return non-zero for consistency."""
+        mock_controls.return_value = []
+
+        with patch('sys.stderr', new=StringIO()):
+            result = main()
+
+        self.assertEqual(result, 1)
 
 
 if __name__ == '__main__':

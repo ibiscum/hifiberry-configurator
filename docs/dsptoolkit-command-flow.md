@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the execution flow of [src/dsptoolkit.py](src/dsptoolkit.py), which provides DSP detection helpers and a small CLI around the local DSP service.
+This document describes the execution flow of [src/configurator/dsptoolkit.py](src/configurator/dsptoolkit.py), which provides DSP detection helpers and a small CLI around the local DSP service.
 
 ## Entry Points
 
@@ -10,10 +10,11 @@ This document describes the execution flow of [src/dsptoolkit.py](src/dsptoolkit
   - `DSPToolkit` class methods
   - module-level convenience functions (`detect_dsp`, `get_detected_dsp_name`, `is_dsp_detected`)
 - CLI mode:
-  - `main()` in [src/dsptoolkit.py](src/dsptoolkit.py)
-  - typically run as `python -m src.dsptoolkit` or direct script execution
+  - `main()` in [src/configurator/dsptoolkit.py](src/configurator/dsptoolkit.py)
+  - generated command `config-dsptoolkit` -> `configurator.dsptoolkit:main`
+  - can also be run as `python -m configurator.dsptoolkit`
 
-Note: unlike some other tools in this repository, there is no `config-*` console script entry in [setup.py](setup.py) for this module.
+The command is generated from `[project.scripts]` in [pyproject.toml](pyproject.toml).
 
 ## Service Contract
 
@@ -39,10 +40,11 @@ flowchart TD
     A[Caller or CLI] --> B[DSPToolkit init]
     B --> C[detect_dsp]
     C --> D[HTTP GET /hardware/dsp]
-    D --> E{status 200?}
-    E -->|no| F[return None]
-    E -->|yes| G{valid JSON?}
-    G -->|no| H[log parse error + return None]
+    D --> E{status code}
+    E -->|200| G{valid JSON?}
+    E -->|5xx| F[return status=error]
+    E -->|other non-200| N[return None]
+    G -->|no| H[log parse error + return status=error]
     G -->|yes| I[return parsed dict]
     I --> J[helper methods derive name/status/bool]
 ```
@@ -51,22 +53,23 @@ flowchart TD
 
 ### DSPToolkit.__init__
 
-Function: [src/dsptoolkit.py](src/dsptoolkit.py)
+Function: [src/configurator/dsptoolkit.py](src/configurator/dsptoolkit.py)
 
 1. Stores host, port, timeout.
 2. Builds `base_url` as `http://{host}:{port}`.
 
 ### DSPToolkit.detect_dsp
 
-Function: [src/dsptoolkit.py](src/dsptoolkit.py)
+Function: [src/configurator/dsptoolkit.py](src/configurator/dsptoolkit.py)
 
 1. Calls `GET {base_url}/hardware/dsp` with configured timeout.
 2. If HTTP 200:
   - parses JSON and returns normalized dict on success
-   - returns `None` on JSON parse failure
-  - returns `{\"status\": \"error\"}` when payload is not a JSON object
-3. For non-200 response, returns `None`.
-4. For connection, timeout, or request exceptions, logs and returns `None`.
+  - returns `{"status": "error"}` on JSON parse failure
+  - returns `{"status": "error"}` when payload is not a JSON object
+3. For HTTP 5xx response, returns `{"status": "error"}`.
+4. For other non-200 responses, returns `None`.
+5. For connection, timeout, or request exceptions, logs and returns `None`.
 
 Status normalization:
 
@@ -79,7 +82,7 @@ Status normalization:
 
 ### DSPToolkit.get_detected_dsp_name
 
-Function: [src/dsptoolkit.py](src/dsptoolkit.py)
+Function: [src/configurator/dsptoolkit.py](src/configurator/dsptoolkit.py)
 
 1. Calls `detect_dsp()`.
 2. Returns `detected_dsp` only when `status == "detected"` and value is a string.
@@ -87,23 +90,23 @@ Function: [src/dsptoolkit.py](src/dsptoolkit.py)
 
 ### DSPToolkit.is_dsp_detected
 
-Function: [src/dsptoolkit.py](src/dsptoolkit.py)
+Function: [src/configurator/dsptoolkit.py](src/configurator/dsptoolkit.py)
 
 1. Calls `detect_dsp()`.
 2. Returns `True` only when response exists and `status == "detected"`.
 
 ### DSPToolkit.get_dsp_status
 
-Function: [src/dsptoolkit.py](src/dsptoolkit.py)
+Function: [src/configurator/dsptoolkit.py](src/configurator/dsptoolkit.py)
 
 1. Calls `detect_dsp()`.
 2. Returns:
-   - `"unavailable"` when response is `None`
+  - `"unavailable"` when response is `None`
   - normalized `status` when response is present
 
 ## Convenience Function Flow
 
-Functions: [src/dsptoolkit.py](src/dsptoolkit.py)
+Functions: [src/configurator/dsptoolkit.py](src/configurator/dsptoolkit.py)
 
 - `detect_dsp(...)`
 - `get_detected_dsp_name(...)`
@@ -113,7 +116,7 @@ Each convenience function creates a fresh `DSPToolkit` instance and delegates to
 
 ## CLI Flow
 
-Function: [src/dsptoolkit.py](src/dsptoolkit.py)
+Function: [src/configurator/dsptoolkit.py](src/configurator/dsptoolkit.py)
 
 Supported output modes:
 
@@ -131,14 +134,14 @@ Selection flow:
 
 Exit behavior:
 
-- Returns `0` when DSP is detected/successful positive result.
+- Returns `0` only when status is `detected`.
 - Returns `1` for unavailable/not detected/error states.
 
 ## Integration Points
 
 Primary in-repo consumer:
 
-- [src/soundcard_detector.py](src/soundcard_detector.py)
+- [src/configurator/soundcard_detector.py](src/configurator/soundcard_detector.py)
 
 Observed usage pattern:
 
@@ -156,5 +159,5 @@ Observed usage pattern:
 
 ## Operational Notes
 
-- The module is defensive: transport and parsing failures degrade to `None`/`unavailable` rather than raising to callers.
+- The module is defensive: transport failures degrade to `None`/`unavailable`, while bad service responses (invalid JSON, 5xx, non-object payload) degrade to `{"status": "error"}`.
 - Convenience functions are simple wrappers and do not share client state across calls.

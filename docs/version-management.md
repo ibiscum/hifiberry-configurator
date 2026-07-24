@@ -7,20 +7,21 @@ This package uses centralized version management to avoid inconsistencies.
 **Version is defined in one place only:**
 - `configurator/_version.py` - Contains `__version__ = "x.y.z"`
 
-## Automatic Version Reading
+## Version Consumers and Sync Points
 
-All other files automatically read from this source:
+Version values are consumed or synchronized in these files:
 
-- `setup.py` - Reads version during package build
+- `pyproject.toml` - Package metadata version used during builds
 - `configurator/server.py` - Imports version for API responses
 - `docs/api-documentation.md` - Synced via `sync_docs_version.py`
 - `debian/changelog` - Can be updated via `update_changelog.py`
 
 ## How to Bump Version
 
-1. **Edit only one file:** Update `configurator/_version.py`
-2. **Sync documentation:** Run `python3 sync_docs_version.py`
-3. **Update changelog:** Run `python3 update_changelog.py "description of changes"`
+1. **Edit source version:** Update `configurator/_version.py`
+2. **Sync package metadata version:** Update `pyproject.toml` to match
+3. **Sync documentation:** Run `python3 sync_docs_version.py`
+4. **Update changelog:** Run `python3 update_changelog.py "description of changes"`
 
 ## Scripts
 
@@ -41,4 +42,4 @@ Fixed bug Y
 Improved performance"
 ```
 
-This ensures all version references stay in sync automatically!
+This helps keep version references in sync across packaging, API output, docs, and changelog.

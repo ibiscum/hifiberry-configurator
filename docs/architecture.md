@@ -26,6 +26,36 @@ The `config-server` application, which is a Flask-based REST API server, also im
 
 When an API request comes in, the server simply calls the same handler method that the equivalent command-line tool would use.
 
+### 4. Import Semantics and `main` Functions
+
+A common question is how Flask can import handler modules if those modules also define a `main()` function or a `if __name__ == "__main__":` block.
+
+Python import behavior makes this safe:
+
+- Importing a module executes top-level definitions (classes, functions, constants), so handler classes become available to the server.
+- A `main()` function is only a function definition until it is explicitly called.
+- Code under `if __name__ == "__main__":` only runs when that file is executed directly (for example, `python some_module.py`), not when imported by another module.
+
+In this project, the server imports handlers through the package export layer in `src/configurator/handlers/__init__.py`, and then instantiates them in `src/configurator/server.py`. This is why handler modules can be reused by both CLI tools and the Flask server without unintended side effects.
+
+### 5. How `config-*` Commands Are Generated
+
+The `config-*` commands are not handwritten shell scripts. They are generated from Python packaging entry points during installation.
+
+Generation flow:
+
+- Command mappings are declared in `pyproject.toml` under `[project.scripts]` (for example, `config-hattools = "configurator.hattools:main"`).
+- The package uses `setuptools.build_meta` as build backend, which reads these script declarations.
+- During installation (local pip install or Debian package build), setuptools creates executable launcher wrappers for each declared command.
+- These wrappers import the target module and call its `main()` function.
+
+Result:
+
+- Running `config-hattools` executes `configurator.hattools:main`.
+- Running `config-server` executes `configurator.server:main`.
+
+For Debian builds, `debian/rules` is configured to use the pyproject/pybuild path, so command generation still comes from the same `[project.scripts]` definitions.
+
 ## Summary
 
 Both the CLI tools and the API server act as clients to the same shared handler modules. This design provides several advantages:
