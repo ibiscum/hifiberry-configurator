@@ -13,6 +13,15 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _validate_bus_number(bus_number: int) -> int:
+    """Validate a bus number before using it in device or sysfs paths."""
+    if not isinstance(bus_number, int):
+        raise TypeError("I2C bus number must be an integer")
+    if bus_number < 0 or bus_number > 10:
+        raise ValueError("I2C bus number must be between 0 and 10")
+    return bus_number
+
+
 class _I2CBus(Protocol):
     """Minimal protocol for bus operations used by this module."""
 
@@ -35,6 +44,8 @@ def scan_i2c_bus(bus_number: int = 1) -> Dict[str, Any]:
     """
     if smbus2 is None:
         raise ImportError("smbus2 module not available. Install with: pip install smbus2")
+
+    bus_number = _validate_bus_number(bus_number)
 
     detected_devices: list[str] = []
     kernel_used: list[str] = []
@@ -97,6 +108,8 @@ def get_i2c_info(bus_number: int = 1) -> Dict[str, Any]:
     Returns:
         Dictionary with I2C bus information and device scan results
     """
+    bus_number = _validate_bus_number(bus_number)
+
     # Check if I2C bus exists
     bus_path = f"/dev/i2c-{bus_number}"
     bus_exists = os.path.exists(bus_path)

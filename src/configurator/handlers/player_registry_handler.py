@@ -196,7 +196,6 @@ class PlayerRegistryHandler:
                 err_msg,
                 "icon_read_failed",
                 500,
-                system_error=str(e),
             )
 
     def set_player_settings(

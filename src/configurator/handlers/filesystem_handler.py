@@ -41,6 +41,23 @@ class FilesystemHandler:
             self.allowed_symlink_destinations = []
             self.allowed_exists_check_destinations = ['/etc']
 
+    @staticmethod
+    def _resolve_path(path: str) -> str:
+        """Normalize and resolve a user-supplied path."""
+        return os.path.realpath(os.path.normpath(path))
+
+    def _is_allowed_path(self, path: str, allowed_destinations: List[str]) -> bool:
+        """Check whether a path stays within one of the allowed roots."""
+        resolved_path = self._resolve_path(path)
+        for allowed_dest in allowed_destinations:
+            allowed_root = self._resolve_path(allowed_dest)
+            try:
+                if os.path.commonpath([resolved_path, allowed_root]) == allowed_root:
+                    return True
+            except ValueError:
+                continue
+        return False
+
     def handle_list_symlinks(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle POST /api/v1/filesystem/symlinks
@@ -62,15 +79,14 @@ class FilesystemHandler:
                 }), 400
 
             # Validate required fields
-            directory: str = cast(str, data.get('directory'))
-            if not directory:
+            requested_directory: str = cast(str, data.get('directory'))
+            if not requested_directory:
                 return jsonify({  # type: ignore[return-value]
                     'status': 'error',
                     'message': 'Missing required field: directory'
                 }), 400
 
-            # Normalize the path to prevent path traversal attacks (e.g. "../.." segments)
-            directory = os.path.normpath(directory)
+            directory = self._resolve_path(requested_directory)
 
             # Check if directory access is allowed
             if not self.allowed_symlink_destinations:
@@ -82,10 +98,10 @@ class FilesystemHandler:
 
             # Validate directory is in allowed list
             directory_allowed: bool = False
-            for allowed_dest in self.allowed_symlink_destinations:
-                if directory.startswith(allowed_dest):
-                    directory_allowed = True
-                    break
+            directory_allowed = self._is_allowed_path(
+                directory,
+                self.allowed_symlink_destinations,
+            )
 
             if not directory_allowed:
                 return jsonify({  # type: ignore[return-value]
@@ -93,7 +109,7 @@ class FilesystemHandler:
                     'message': 'Directory is not in allowed destinations',
                     'error': 'directory_not_allowed',
                     'data': {
-                        'directory': directory,
+                        'directory': requested_directory,
                         'allowed_destinations': self.allowed_symlink_destinations
                     }
                 }), 403
@@ -220,15 +236,14 @@ class FilesystemHandler:
                 }), 400
 
             # Validate required fields
-            path: str = cast(str, data.get('path'))
-            if not path:
+            requested_path: str = cast(str, data.get('path'))
+            if not requested_path:
                 return jsonify({  # type: ignore[return-value]
                     'status': 'error',
                     'message': 'Missing required field: path'
                 }), 400
 
-            # Normalize the path to prevent path traversal attacks (e.g. "../.." segments)
-            path = os.path.normpath(path)
+            path = self._resolve_path(requested_path)
 
             # Check if directory access is allowed
             if not self.allowed_exists_check_destinations:
@@ -240,10 +255,10 @@ class FilesystemHandler:
 
             # Validate path is in allowed list
             path_allowed: bool = False
-            for allowed_dest in self.allowed_exists_check_destinations:
-                if path.startswith(allowed_dest):
-                    path_allowed = True
-                    break
+            path_allowed = self._is_allowed_path(
+                path,
+                self.allowed_exists_check_destinations,
+            )
 
             if not path_allowed:
                 return jsonify({  # type: ignore[return-value]
@@ -251,7 +266,7 @@ class FilesystemHandler:
                     'message': 'Path is not in allowed destinations',
                     'error': 'path_not_allowed',
                     'data': {
-                        'path': path,
+                        'path': requested_path,
                         'allowed_destinations': self.allowed_exists_check_destinations
                     }
                 }), 403

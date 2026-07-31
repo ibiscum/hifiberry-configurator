@@ -130,7 +130,6 @@ class BluetoothHandler:
                 "Failed to store passkey",
                 "store_passkey_failed",
                 500,
-                system_error=str(e),
             )
 
     def handle_set_show_modal(self) -> Union["Response", tuple["Response", int]]:
@@ -170,7 +169,6 @@ class BluetoothHandler:
                 "Failed to store modal request",
                 "store_modal_failed",
                 500,
-                system_error=str(e),
             )
 
     def handle_get_show_modal(self) -> Union["Response", tuple["Response", int]]:
