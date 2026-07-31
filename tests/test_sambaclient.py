@@ -81,6 +81,15 @@ class TestAuthBehavior(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("Credentials file not found", error or "")
 
+    @patch("configurator.sambaclient.shutil.which", return_value="/usr/bin/smbclient")
+    @patch("configurator.sambaclient.subprocess.run")
+    def test_check_connection_rejects_invalid_server_address(self, mock_run, _mock_which):
+        """Server values that look like command options must be rejected."""
+        ok, error = sambaclient.check_smb_connection("--help")
+        self.assertFalse(ok)
+        self.assertEqual(error, "Invalid SMB server address")
+        mock_run.assert_not_called()
+
 
 class TestShareAndVersionFlow(unittest.TestCase):
     """Tests for list_smb_shares and detect_smb_version behavior."""
