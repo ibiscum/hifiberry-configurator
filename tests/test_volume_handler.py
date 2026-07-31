@@ -8,6 +8,7 @@ getting, setting, storing, and restoring operations.
 import unittest
 from unittest.mock import patch, MagicMock
 import sys
+from typing import Any, Dict, Tuple, cast
 
 # Mock Flask before importing handler
 flask_mock = MagicMock()
@@ -37,7 +38,7 @@ sys.modules['flask'] = flask_mock
 
 from configurator.handlers.volume_handler import VolumeHandler  # noqa: E402
 
-def get_response(result):
+def get_response(result: Any) -> Tuple[Dict[str, Any], int]:
     """Helper to extract response and status code from handler result"""
     if isinstance(result, tuple):
         response, status = result[0], result[1]
@@ -50,7 +51,10 @@ def get_response(result):
         if json_payload is not None:
             response = json_payload
 
-    return response, status
+    if not isinstance(response, dict):
+        raise AssertionError(f"Expected dict response payload, got {type(response).__name__}")
+
+    return cast(Dict[str, Any], response), int(status)
 
 
 class TestVolumeHandlerListControls(unittest.TestCase):
