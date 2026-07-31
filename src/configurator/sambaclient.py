@@ -91,6 +91,35 @@ def _apply_auth_args(
     cmd.append('-N')
     return None, None
 
+
+def _is_valid_server_address(server: Any) -> bool:
+    """Validate SMB server address/hostname before passing to smbclient."""
+    if not isinstance(server, str):
+        return False
+
+    server = server.strip()
+    if not server or server.startswith('-') or len(server) > 253:
+        return False
+
+    if any(ch.isspace() for ch in server):
+        return False
+
+    try:
+        ipaddress.ip_address(server)
+        return True
+    except ValueError:
+        pass
+
+    if server.endswith('.'):
+        server = server[:-1]
+
+    labels = server.split('.')
+    if not labels:
+        return False
+
+    hostname_label_re = re.compile(r'^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
+    return all(hostname_label_re.match(label) for label in labels)
+
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='SMB/CIFS client tools')
@@ -389,6 +418,11 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
     if not shutil.which('smbclient'):
         logger.error("smbclient command not found. Please install samba-client package.")
         return False, "smbclient command not found"
+
+    server = server.strip() if isinstance(server, str) else server
+    if not _is_valid_server_address(server):
+        logger.error(f"Invalid SMB server address: {server!r}")
+        return False, "Invalid SMB server address"
 
     # Build the command
     cmd = ['smbclient', '-L', server]
