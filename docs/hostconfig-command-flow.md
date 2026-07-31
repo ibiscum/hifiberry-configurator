@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the execution flow of [src/hostconfig.py](src/hostconfig.py), including its hostname update helpers and module-level CLI.
+This document describes the execution flow of [src/configurator/hostconfig.py](src/configurator/hostconfig.py), including its hostname update helpers and module-level CLI.
 
 ## Entry Points
 
@@ -10,13 +10,13 @@ This document describes the execution flow of [src/hostconfig.py](src/hostconfig
   - `set_hostname_with_hosts_update(new_hostname)`
   - `validate_hostname(hostname)`
   - `sanitize_hostname(pretty_hostname, max_length=64)`
-- Module CLI in [src/hostconfig.py](src/hostconfig.py):
+- Module CLI in [src/configurator/hostconfig.py](src/configurator/hostconfig.py):
   - `main()` with subcommands `get`, `validate`, `sanitize`, `set`
 
 Note:
 
 - There is currently no dedicated `config-*` console script mapping for this module in [pyproject.toml](pyproject.toml) `[project.scripts]`.
-- API hostname routes flow through [src/handlers/hostname_handler.py](src/handlers/hostname_handler.py), which imports `set_hostname_with_hosts_update` from this module.
+- API hostname routes flow through [src/configurator/handlers/hostname_handler.py](src/configurator/handlers/hostname_handler.py), which imports `set_hostname_with_hosts_update` from this module.
 
 ## High-Level Flow
 
@@ -42,7 +42,7 @@ flowchart TD
 
 ### read_hosts_file
 
-Function: [src/hostconfig.py](src/hostconfig.py)
+Function: [src/configurator/hostconfig.py](src/configurator/hostconfig.py)
 
 1. Opens `/etc/hosts` as UTF-8.
 2. Returns list of lines.
@@ -50,7 +50,7 @@ Function: [src/hostconfig.py](src/hostconfig.py)
 
 ### write_hosts_file
 
-Function: [src/hostconfig.py](src/hostconfig.py)
+Function: [src/configurator/hostconfig.py](src/configurator/hostconfig.py)
 
 1. Creates backup file `/etc/hosts.backup` from current content.
 2. Writes updated host lines to `/etc/hosts`.
@@ -58,7 +58,7 @@ Function: [src/hostconfig.py](src/hostconfig.py)
 
 ### update_hosts_file
 
-Function: [src/hostconfig.py](src/hostconfig.py)
+Function: [src/configurator/hostconfig.py](src/configurator/hostconfig.py)
 
 Inputs:
 
@@ -76,7 +76,7 @@ Behavior:
 
 ### get_current_hostname
 
-Function: [src/hostconfig.py](src/hostconfig.py)
+Function: [src/configurator/hostconfig.py](src/configurator/hostconfig.py)
 
 1. Runs `hostnamectl hostname`.
 2. Returns stripped hostname on success.
@@ -84,7 +84,7 @@ Function: [src/hostconfig.py](src/hostconfig.py)
 
 ### set_hostname_with_hosts_update
 
-Function: [src/hostconfig.py](src/hostconfig.py)
+Function: [src/configurator/hostconfig.py](src/configurator/hostconfig.py)
 
 1. Reads current hostname (`old_hostname`).
 2. Executes `hostnamectl set-hostname <new_hostname>`.
@@ -94,7 +94,7 @@ Function: [src/hostconfig.py](src/hostconfig.py)
 
 ### validate_hostname
 
-Function: [src/hostconfig.py](src/hostconfig.py)
+Function: [src/configurator/hostconfig.py](src/configurator/hostconfig.py)
 
 Validation rules enforced:
 
@@ -107,7 +107,7 @@ Validation rules enforced:
 
 ### sanitize_hostname
 
-Function: [src/hostconfig.py](src/hostconfig.py)
+Function: [src/configurator/hostconfig.py](src/configurator/hostconfig.py)
 
 Transformation steps:
 
@@ -140,10 +140,10 @@ Subcommands:
 
 Primary API path using this module:
 
-- Route `/api/v1/hostname` in server routing -> [src/handlers/hostname_handler.py](src/handlers/hostname_handler.py)
+- Route `/api/v1/hostname` in server routing -> [src/configurator/handlers/hostname_handler.py](src/configurator/handlers/hostname_handler.py)
 - Handler calls:
-  - validation/sanitization from [src/hostname_utils.py](src/hostname_utils.py)
-  - hostname write operation via `set_hostname_with_hosts_update()` from [src/hostconfig.py](src/hostconfig.py)
+  - validation/sanitization from [src/configurator/hostname_utils.py](src/configurator/hostname_utils.py)
+  - hostname write operation via `set_hostname_with_hosts_update()` from [src/configurator/hostconfig.py](src/configurator/hostconfig.py)
 
 ## Side Effects
 

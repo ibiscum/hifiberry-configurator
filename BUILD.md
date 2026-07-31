@@ -14,6 +14,13 @@ This script installs all required build tools:
 - Python 3 development headers
 - System libraries (libffi-dev, libssl-dev, i2c-tools)
 
+For local development test runs (outside the Debian package build), install the
+minimal test dependencies in your venv first:
+
+```bash
+python -m pip install pytest flask
+```
+
 ### 2. Build the Package
 
 ```bash

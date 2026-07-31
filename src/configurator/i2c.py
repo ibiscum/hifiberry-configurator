@@ -36,24 +36,25 @@ def scan_i2c_bus(bus_number: int = 1) -> Dict[str, Any]:
     if smbus2 is None:
         raise ImportError("smbus2 module not available. Install with: pip install smbus2")
 
-    detected_devices = []
-    kernel_used = []
+    detected_devices: list[str] = []
+    kernel_used: list[str] = []
 
     try:
         # Open I2C bus
         bus = cast(_I2CBus, smbus2.SMBus(bus_number))
 
-        # Scan addresses 0x03 to 0x77 (standard I2C address range)
-        for addr in range(0x03, 0x78):
-            try:
-                # Try to read a byte from the device
-                bus.read_byte(addr)
-                detected_devices.append(f"0x{addr:02x}")
-            except OSError:
-                # Device not present or not responding
-                pass
-
-        bus.close()
+        try:
+            # Scan addresses 0x03 to 0x77 (standard I2C address range)
+            for addr in range(0x03, 0x78):
+                try:
+                    # Try to read a byte from the device
+                    bus.read_byte(addr)
+                    detected_devices.append(f"0x{addr:02x}")
+                except OSError:
+                    # Device not present or not responding
+                    pass
+        finally:
+            bus.close()
 
         # Check for kernel-used addresses by reading /sys/bus/i2c/devices/
         try:
@@ -61,13 +62,16 @@ def scan_i2c_bus(bus_number: int = 1) -> Dict[str, Any]:
             if os.path.exists(devices_path):
                 for item in os.listdir(devices_path):
                     if '-' in item and item.startswith(f"{bus_number}-"):
-                        # Extract address from device name (format: bus-address)
-                        addr_str = item.split('-')[1]
-                        if len(addr_str) >= 4:  # Should be like "0048" or "004d"
-                            addr = int(addr_str, 16)
-                            addr_hex = f"0x{addr:02x}"
-                            if addr_hex not in kernel_used:
-                                kernel_used.append(addr_hex)
+                        try:
+                            # Extract address from device name (format: bus-address)
+                            addr_str = item.split('-')[1]
+                            if len(addr_str) >= 4:  # Should be like "0048" or "004d"
+                                addr = int(addr_str, 16)
+                                addr_hex = f"0x{addr:02x}"
+                                if addr_hex not in kernel_used:
+                                    kernel_used.append(addr_hex)
+                        except (IndexError, ValueError):
+                            logger.debug("Skipping malformed kernel I2C entry: %s", item)
         except Exception as e:
             logger.debug(f"Could not read kernel I2C devices: {e}")
 

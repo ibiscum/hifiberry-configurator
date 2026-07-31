@@ -10,6 +10,7 @@ import sys
 import json
 import logging
 import argparse
+from typing import Any
 from flask import Flask, jsonify
 try:
     from waitress import serve
@@ -19,7 +20,42 @@ except ImportError:
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler
+from .handlers.systemd_handler import SystemdHandler
+from .handlers.smb_handler import SMBHandler
+from .handlers.hostname_handler import HostnameHandler
+from .handlers.soundcard_handler import SoundcardHandler
+from .handlers.system_handler import SystemHandler
+from .handlers.filesystem_handler import FilesystemHandler
+from .handlers.script_handler import ScriptHandler
+from .handlers.network_handler import NetworkHandler
+from .handlers.i2c_handler import I2CHandler
+from .handlers.volume_handler import VolumeHandler
+from .handlers.player_registry_handler import PlayerRegistryHandler
+_BluetoothHandlerAlias: Any
+try:
+    from .handlers.bluetooth_handler import BluetoothHandler as _BluetoothHandlerAlias
+except ImportError:
+    class _UnavailableBluetoothHandler:
+        """Fallback handler when Bluetooth dependencies are unavailable."""
+
+        def __getattr__(self, _name):
+            raise RuntimeError("Bluetooth dependencies are not available")
+
+    _BluetoothHandlerAlias = _UnavailableBluetoothHandler
+BluetoothHandler: Any = _BluetoothHandlerAlias
+
+_BLEProvisioningHandlerAlias: Any
+try:
+    from .handlers.ble_handler import BLEProvisioningHandler as _BLEProvisioningHandlerAlias
+except ImportError:
+    class _UnavailableBLEProvisioningHandler:
+        """Fallback handler when BLE dependencies are unavailable."""
+
+        def __getattr__(self, _name):
+            raise RuntimeError("BLE dependencies are not available")
+
+    _BLEProvisioningHandlerAlias = _UnavailableBLEProvisioningHandler
+BLEProvisioningHandler: Any = _BLEProvisioningHandlerAlias
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
@@ -148,7 +184,14 @@ class ConfigAPIServer:
 
     def _register_module_settings(self):
         """Register settings that should be saved/restored by modules"""
-        pass
+        def _restore_setup_completed(value: str) -> None:
+            self.configdb.set('system.setup_completed', value)
+
+        self.settings_manager.register_setting(
+            'system.setup_completed',
+            lambda: self.configdb.get('system.setup_completed'),
+            _restore_setup_completed,
+        )
 
     def restore_settings(self):
         """Restore all registered settings from configdb"""
@@ -770,18 +813,10 @@ def parse_arguments():
 
     return parser.parse_args()
 
-def main():
+def main() -> int:
     """Main function"""
-    # Add early logging to stderr before anything else
-    import sys
-    print("config-server: main() called", file=sys.stderr, flush=True)
-
     try:
-        print("config-server: Starting initialization...", file=sys.stderr, flush=True)
-
         args = parse_arguments()
-
-        print(f"config-server: Arguments parsed - port={args.port}", file=sys.stderr, flush=True)
 
         # Configure logging
         setup_logging(args.verbose)
@@ -801,9 +836,9 @@ def main():
         logger.info("Server instance created successfully")
     except Exception as e:
         import traceback
-        print(f"config-server: FATAL ERROR during initialization: {e}", file=sys.stderr, flush=True)
-        print(f"config-server: Traceback:\n{traceback.format_exc()}", file=sys.stderr, flush=True)
-        sys.exit(1)
+        logger.error(f"FATAL ERROR during initialization: {e}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        return 1
 
     # Restore settings if requested (standalone mode)
     if args.restore_settings:
@@ -830,6 +865,7 @@ def main():
 
     # Start the server normally
     server.run()
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the execution flow of [src/cmdline.py](src/cmdline.py), exposed as the `config-cmdline` CLI command.
+This document describes the execution flow of [src/configurator/cmdline.py](src/configurator/cmdline.py), exposed as the `config-cmdline` CLI command.
 
 ## Entry Point
 
@@ -47,7 +47,7 @@ flowchart TD
 
 ### main
 
-Function: [src/cmdline.py](src/cmdline.py)
+Function: [src/configurator/cmdline.py](src/configurator/cmdline.py)
 
 1. Configures INFO logging.
 2. Parses exactly one action flag using a required mutually exclusive group:
@@ -62,7 +62,7 @@ Function: [src/cmdline.py](src/cmdline.py)
 
 ### CmdlineTxt.__init__
 
-Function: [src/cmdline.py](src/cmdline.py)
+Function: [src/configurator/cmdline.py](src/configurator/cmdline.py)
 
 1. Resolves target file via `_find_cmdline_file()`.
 2. Reads current kernel cmdline via `_read_file()`.
@@ -70,7 +70,7 @@ Function: [src/cmdline.py](src/cmdline.py)
 
 ### _find_cmdline_file
 
-Function: [src/cmdline.py](src/cmdline.py)
+Function: [src/configurator/cmdline.py](src/configurator/cmdline.py)
 
 Search order:
 
@@ -81,7 +81,7 @@ Raises `FileNotFoundError` if neither exists.
 
 ### Token mutation methods
 
-Function family in [src/cmdline.py](src/cmdline.py)
+Function family in [src/configurator/cmdline.py](src/configurator/cmdline.py)
 
 - `enable_serial_console`:
   - ensures `console=serial0,115200` exists at the beginning of the token list.
@@ -96,7 +96,7 @@ All methods are idempotent and only update in-memory content when a real change 
 
 ### save and backup behavior
 
-Function: [src/cmdline.py](src/cmdline.py)
+Function: [src/configurator/cmdline.py](src/configurator/cmdline.py)
 
 1. Compares `content` with `original_content`.
 2. If changed:

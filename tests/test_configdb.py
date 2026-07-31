@@ -17,12 +17,21 @@ import os
 import sys
 import shutil
 from unittest.mock import patch
+from typing import Any, Dict, Tuple, cast
 
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from configurator.configdb import ConfigDB
 from cryptography.fernet import InvalidToken
+
+
+def unwrap_response(result: Any) -> Tuple[Dict[str, Any], int]:
+    """Normalize handler return values to (payload, status_code)."""
+    if isinstance(result, tuple):
+        payload, status = result
+        return cast(Dict[str, Any], payload), cast(int, status)
+    return cast(Dict[str, Any], result), 200
 
 
 class TestConfigDBInitialization(unittest.TestCase):
@@ -59,6 +68,12 @@ class TestConfigDBInitialization(unittest.TestCase):
         result = cursor.fetchone()
         conn.close()
         self.assertIsNotNone(result)
+
+    def test_init_raises_when_database_setup_fails(self):
+        """Initialization should fail fast if DB setup cannot complete."""
+        with patch.object(ConfigDB, '_ensure_db_exists', return_value=False):
+            with self.assertRaises(RuntimeError):
+                ConfigDB(self.db_path)
 
 
 class TestBasicKeyValueOperations(unittest.TestCase):
@@ -445,23 +460,31 @@ class TestFlaskHandlers(unittest.TestCase):
     def test_handle_get_config_keys(self, mock_request, mock_jsonify):
         """Test handle_get_config_keys Flask handler"""
         mock_request.args.get.return_value = None
-        mock_jsonify.return_value = {'status': 'success'}
+        mock_jsonify.side_effect = lambda payload: payload
 
         result = self.db.handle_get_config_keys()
+        payload, status = unwrap_response(result)
 
         mock_request.args.get.assert_called_once_with('prefix')
-        self.assertIsNotNone(result)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload['status'], 'success')
+        self.assertEqual(payload['count'], 1)
+        self.assertEqual(payload['data'], ['test_key'])
 
     @patch('configurator.configdb.jsonify')
     @patch('configurator.configdb.request')
     def test_handle_get_config_value(self, mock_request, mock_jsonify):
         """Test handle_get_config_value Flask handler"""
         mock_request.args.get.side_effect = lambda key, default=None: 'false' if key == 'secure' else None
-        mock_jsonify.return_value = {'status': 'success'}
+        mock_jsonify.side_effect = lambda payload: payload
 
         result = self.db.handle_get_config_value('test_key')
+        payload, status = unwrap_response(result)
 
-        self.assertIsNotNone(result)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload['status'], 'success')
+        self.assertEqual(payload['data']['key'], 'test_key')
+        self.assertEqual(payload['data']['value'], 'test_value')
 
     @patch('configurator.configdb.jsonify')
     @patch('configurator.configdb.request')
@@ -470,11 +493,48 @@ class TestFlaskHandlers(unittest.TestCase):
         mock_request.is_json = True
         mock_request.get_data.return_value = '{"value": "new_value", "secure": false}'
         mock_request.get_json.return_value = {'value': 'new_value', 'secure': False}
-        mock_jsonify.return_value = {'status': 'success'}
+        mock_jsonify.side_effect = lambda payload: payload
 
         result = self.db.handle_set_config_value('new_key')
+        payload, status = unwrap_response(result)
 
-        self.assertIsNotNone(result)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload['status'], 'success')
+        self.assertEqual(payload['data']['key'], 'new_key')
+        self.assertEqual(payload['data']['value'], 'new_value')
+        self.assertEqual(self.db.get('new_key'), 'new_value')
+
+    @patch('configurator.configdb.jsonify')
+    @patch('configurator.configdb.request')
+    def test_handle_set_config_value_secure_string_false_not_encrypted(self, mock_request, mock_jsonify):
+        """String value 'false' for secure should be parsed as False."""
+        mock_request.is_json = True
+        mock_request.get_data.return_value = '{"value": "plain", "secure": "false"}'
+        mock_request.get_json.return_value = {'value': 'plain', 'secure': 'false'}
+        mock_jsonify.side_effect = lambda payload: payload
+
+        result = self.db.handle_set_config_value('plain_key')
+        payload, status = unwrap_response(result)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload['status'], 'success')
+        self.assertEqual(self.db.get('plain_key', secure=False), 'plain')
+
+    @patch('configurator.configdb.jsonify')
+    @patch('configurator.configdb.request')
+    def test_handle_set_config_value_invalid_secure_returns_400(self, mock_request, mock_jsonify):
+        """Invalid secure field values should be rejected with 400."""
+        mock_request.is_json = True
+        mock_request.get_data.return_value = '{"value": "v", "secure": "not-bool"}'
+        mock_request.get_json.return_value = {'value': 'v', 'secure': 'not-bool'}
+        mock_jsonify.side_effect = lambda payload: payload
+
+        result = self.db.handle_set_config_value('key')
+        payload, status = unwrap_response(result)
+
+        self.assertEqual(status, 400)
+        self.assertEqual(payload['status'], 'error')
+        self.assertEqual(payload['message'], 'Field "secure" must be a boolean')
 
     @patch('configurator.configdb.jsonify')
     @patch('configurator.configdb.request')
@@ -509,11 +569,49 @@ class TestFlaskHandlers(unittest.TestCase):
     @patch('configurator.configdb.request')
     def test_handle_delete_config_value(self, mock_request, mock_jsonify):
         """Test handle_delete_config_value Flask handler"""
-        mock_jsonify.return_value = {'status': 'success'}
+        mock_jsonify.side_effect = lambda payload: payload
 
         result = self.db.handle_delete_config_value('test_key')
+        payload, status = unwrap_response(result)
 
-        self.assertIsNotNone(result)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload['status'], 'success')
+        self.assertIsNone(self.db.get('test_key'))
+
+    @patch('configurator.configdb.jsonify')
+    @patch('configurator.configdb.request')
+    def test_handle_get_config_value_decrypt_failure_returns_500(self, mock_request, mock_jsonify):
+        """Decryption errors should surface as server errors, not 404."""
+        mock_request.args.get.side_effect = lambda key, default=None: 'true' if key == 'secure' else None
+        mock_jsonify.side_effect = lambda payload: payload
+
+        with patch.object(self.db, 'get', side_effect=InvalidToken('bad token')):
+            result = self.db.handle_get_config_value('test_key')
+
+        payload, status = unwrap_response(result)
+        self.assertEqual(status, 500)
+        self.assertEqual(payload['status'], 'error')
+        self.assertEqual(payload['message'], 'Failed to retrieve configuration value')
+
+
+class TestCLIBehavior(unittest.TestCase):
+    """Tests for CLI argument conflict handling and dispatch."""
+
+    @patch('sys.argv', ['config-db', '--get', 'a', '--set', 'b', 'c'])
+    def test_cli_rejects_conflicting_option_commands(self):
+        """Mutually exclusive option commands should be rejected by argparse."""
+        from configurator.configdb import main
+
+        with self.assertRaises(SystemExit):
+            main()
+
+    @patch('sys.argv', ['config-db', '--get', 'a', 'set', 'b', 'c'])
+    def test_cli_rejects_mixed_option_and_legacy_syntax(self):
+        """Option-style commands cannot be mixed with legacy positional syntax."""
+        from configurator.configdb import main
+
+        with self.assertRaises(SystemExit):
+            main()
 
 
 class TestEdgeCasesAndRobustness(unittest.TestCase):

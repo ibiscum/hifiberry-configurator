@@ -136,18 +136,20 @@ class TestGetHardwareIndex:
         """Test hardware index when alsaaudio is not available."""
         mock_fallback.return_value = 0
         card = Soundcard(name="DAC+ Pro")
-        result = card.get_hardware_index()
-        # Should call fallback if alsaaudio not available
-        assert result is not None or result is None  # Can be either
+        with patch("builtins.__import__", side_effect=ImportError("No module")):
+            result = card.get_hardware_index()
+        assert result == 0
+        mock_fallback.assert_called_once_with()
 
     @patch("configurator.soundcard.Soundcard._get_hardware_index_fallback")
     def test_get_hardware_index_fallback_called(self, mock_fallback):
         """Test that fallback is used when primary methods fail."""
         mock_fallback.return_value = 2
         card = Soundcard(name="DAC+ Pro")
-        result = card.get_hardware_index()
-        # Should return fallback value or try primary method
-        assert result is not None or mock_fallback.called
+        with patch("builtins.__import__", side_effect=ImportError("No module")):
+            result = card.get_hardware_index()
+        assert result == 2
+        mock_fallback.assert_called_once_with()
 
 
 class TestGetMixerControlName:
@@ -193,6 +195,7 @@ class TestCheckMixerControlExists:
         """Test detecting existing mixer control via amixer subprocess."""
         mock_hw_index.return_value = 0
         mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "Simple mixer control 'Digital',0"
         card = Soundcard(name="DAC+ Pro")
         # When alsaaudio is not available, it falls back to amixer
         with patch("builtins.__import__", side_effect=ImportError("No module")):
@@ -204,11 +207,29 @@ class TestCheckMixerControlExists:
     def test_check_mixer_control_exists_not_found(self, mock_hw_index, mock_run):
         """Test when mixer control doesn't exist."""
         mock_hw_index.return_value = 0
-        mock_run.return_value.returncode = 1
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "Simple mixer control 'PCM',0"
         card = Soundcard(name="DAC+ Pro")
         with patch("builtins.__import__", side_effect=ImportError("No module")):
             exists = card._check_mixer_control_exists("Digital")
             assert exists is False
+
+    @patch("configurator.soundcard.subprocess.run")
+    @patch("configurator.soundcard.Soundcard.get_hardware_index")
+    def test_check_mixer_control_exists_uses_shell_safe_command(self, mock_hw_index, mock_run):
+        """Test subprocess invocation is list-based and shell-safe."""
+        mock_hw_index.return_value = 0
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = ""
+        card = Soundcard(name="DAC+ Pro")
+        with patch("builtins.__import__", side_effect=ImportError("No module")):
+            card._check_mixer_control_exists("Digital'; rm -rf /")
+
+        args, kwargs = mock_run.call_args
+        assert args[0] == ["amixer", "-c", "0"]
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        assert "shell" not in kwargs
 
     @patch("configurator.soundcard.subprocess.run")
     @patch("configurator.soundcard.Soundcard.get_hardware_index")
@@ -340,6 +361,24 @@ class TestDetectionLogic:
         initial = {"name": "DAC2 Pro", "headphone_volume_control": "Headphone"}
         result = card._distinguish_dac_pro_models("HiFiBerry DAC+ Pro", initial)
         assert result is not None
+
+    @patch("configurator.soundcard.Soundcard._detect_card_aplay_only")
+    def test_detect_card_no_eeprom_uses_aplay_only(self, mock_aplay_only):
+        """Test no_eeprom mode skips full detector path."""
+        mock_aplay_only.return_value = {"name": "DAC+ Light", "volume_control": None}
+        card = Soundcard(name="DAC+ Pro")
+        result = card._detect_card(no_eeprom=True)
+        assert result == {"name": "DAC+ Light", "volume_control": None}
+        mock_aplay_only.assert_called_once_with()
+
+    @patch("configurator.soundcard.Soundcard._detect_card_aplay_only")
+    def test_detect_card_aplay_priority_no_eeprom_uses_aplay_only(self, mock_aplay_only):
+        """Test no_eeprom is honored in aplay-priority mode too."""
+        mock_aplay_only.return_value = {"name": "DAC+ Light", "volume_control": None}
+        card = Soundcard(name="DAC+ Pro")
+        result = card._detect_card_aplay_priority(no_eeprom=True)
+        assert result == {"name": "DAC+ Light", "volume_control": None}
+        mock_aplay_only.assert_called_once_with()
 
 
 class TestEdgeCases:

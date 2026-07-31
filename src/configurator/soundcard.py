@@ -499,11 +499,11 @@ class Soundcard:
             if card_number is not None:
                 # Check for headphone mixer control
                 amixer_output = subprocess.check_output(
-                    f"amixer -c {card_number} | grep -i head",
-                    shell=True, text=True
+                    ["amixer", "-c", str(card_number)],
+                    text=True,
                 ).strip()
 
-                if "Headphone" in amixer_output:
+                if "headphone" in amixer_output.lower():
                     logging.info("Detected DAC2 Pro (has Headphone mixer control)")
                     # Return DAC2 Pro configuration
                     for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
@@ -532,8 +532,12 @@ class Soundcard:
         Returns:
             Dictionary with card attributes or None if not detected
         """
+        if no_eeprom:
+            logging.info("no_eeprom=True: using aplay-only sound card detection")
+            return self._detect_card_aplay_only()
+
         try:
-            from src.configurator.soundcard_detector import SoundcardDetector
+            from configurator.soundcard_detector import SoundcardDetector
 
             # Use SoundcardDetector for comprehensive detection
             # Enable pcm5102 detection to support DAC+ Zero/Light cards
@@ -588,6 +592,71 @@ class Soundcard:
             logging.error(f"Error during sound card detection: {str(e)}")
             return None
 
+    def _detect_card_aplay_only(self) -> Optional[dict[str, Any]]:
+        """Detect sound card from `aplay -l` only, without EEPROM/HAT probing."""
+        try:
+            from configurator.soundcard_detector import SoundcardDetector
+
+            aplay_result = subprocess.run(
+                ["aplay", "-l"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+
+            if "hifiberry" not in aplay_result.lower():
+                logging.warning("No matching sound card detected.")
+                return None
+
+            detector = SoundcardDetector(include_pcm5102=True)
+            for line in aplay_result.strip().split("\n"):
+                if "hifiberry" not in line.lower() or "[" not in line or "]" not in line:
+                    continue
+
+                detected_overlay = detector._map_aplay_to_overlay(line)  # type: ignore[attr-defined]
+                if not detected_overlay:
+                    continue
+
+                dtoverlay_name = f"hifiberry-{detected_overlay}".split(",", 1)[0]
+                matching_cards: list[tuple[str, dict[str, Any]]] = []
+                for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                    dtoverlay = attributes.get("dtoverlay")
+                    if not dtoverlay:
+                        continue
+                    if dtoverlay.split(",", 1)[0] == dtoverlay_name:
+                        matching_cards.append((card_name, attributes))
+
+                if not matching_cards:
+                    logging.warning(
+                        f"Overlay '{detected_overlay}' from aplay not found in SOUND_CARD_DEFINITIONS"
+                    )
+                    return None
+
+                no_hat_candidates = [
+                    (name, attrs)
+                    for name, attrs in matching_cards
+                    if not attrs.get("hat_name")
+                ]
+                selected_name, selected_attrs = (
+                    no_hat_candidates[0] if no_hat_candidates else matching_cards[0]
+                )
+                initial_detection = {"name": selected_name, **selected_attrs}
+                refined_detection = self._additional_card_checks(
+                    aplay_result, initial_detection
+                )
+                logging.info(f"Detected sound card (aplay-only): {selected_name}")
+                return refined_detection
+
+            logging.warning("No matching sound card detected.")
+            return None
+
+        except (subprocess.CalledProcessError, OSError) as e:
+            logging.warning(f"Could not get aplay output: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"Error during aplay-only sound card detection: {str(e)}")
+            return None
+
     def _detect_card_aplay_priority(self, no_eeprom: bool = False) -> Optional[dict[str, Any]]:
         """
         Detect sound card with aplay -l as the highest priority source.
@@ -600,8 +669,12 @@ class Soundcard:
         Returns:
             Dictionary with card attributes or None if not detected
         """
+        if no_eeprom:
+            logging.info("no_eeprom=True: skipping EEPROM/HAT logic in aplay-priority mode")
+            return self._detect_card_aplay_only()
+
         try:
-            from src.configurator.soundcard_detector import SoundcardDetector
+            from configurator.soundcard_detector import SoundcardDetector
 
             # Step 0: Check if there's a fixed card name in config.txt comment
             try:
@@ -612,7 +685,12 @@ class Soundcard:
                     if config_card_name in SOUND_CARD_DEFINITIONS:
                         # Verify that aplay shows a HiFiBerry card is loaded
                         try:
-                            aplay_result = subprocess.check_output("aplay -l", shell=True, text=True)
+                            aplay_result = subprocess.run(
+                                ["aplay", "-l"],
+                                check=True,
+                                capture_output=True,
+                                text=True,
+                            ).stdout
                             if 'hifiberry' in aplay_result.lower():
                                 logging.info(f"Using fixed card from config.txt comment: {config_card_name}")
                                 return {"name": config_card_name, **SOUND_CARD_DEFINITIONS[config_card_name]}
@@ -625,7 +703,12 @@ class Soundcard:
             # Step 1: Get the actual loaded ALSA driver from aplay -l (highest priority)
             detected_overlay = None
             try:
-                aplay_result = subprocess.check_output("aplay -l", shell=True, text=True)
+                aplay_result = subprocess.run(
+                    ["aplay", "-l"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout
                 if 'hifiberry' in aplay_result.lower():
                     # Use the SoundcardDetector's aplay mapping to get the overlay
                     detector = SoundcardDetector()
@@ -663,14 +746,16 @@ class Soundcard:
                     # Try exact match first
                     if card_name in SOUND_CARD_DEFINITIONS:
                         logging.info(f"Detected sound card (aplay priority): {card_name}")
-                        return {"name": card_name, **SOUND_CARD_DEFINITIONS[card_name]}
+                        detection = {"name": card_name, **SOUND_CARD_DEFINITIONS[card_name]}
+                        return self._additional_card_checks(aplay_result, detection)
 
                     # Try alias matching if exact match failed
                     for def_name, attributes in SOUND_CARD_DEFINITIONS.items():
                         aliases = attributes.get('aliases', [])
                         if card_name in aliases:
                             logging.info(f"Detected sound card via alias (aplay priority): {card_name} -> {def_name}")
-                            return {"name": def_name, **attributes}
+                            detection = {"name": def_name, **attributes}
+                            return self._additional_card_checks(aplay_result, detection)
 
                     # If not found in definitions, log warning
                     logging.warning(f"Card name '{card_name}' from aplay not found in SOUND_CARD_DEFINITIONS")
@@ -765,7 +850,12 @@ class Soundcard:
         Fallback method to get hardware index using shell commands.
         """
         try:
-            result = subprocess.check_output("aplay -l", shell=True, text=True)
+            result = subprocess.run(
+                ["aplay", "-l"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
             lines = result.strip().split('\n')
             for line in lines:
                 if 'hifiberry' in line.lower():
@@ -815,10 +905,10 @@ class Soundcard:
                 statefile.flush()
 
                 # Apply the state file using alsactl
-                command = f"/usr/sbin/alsactl -f {statefile.name} restore"
+                command = ["/usr/sbin/alsactl", "-f", statefile.name, "restore"]
                 logging.debug(f"Running command: {command}")
 
-                result = subprocess.run(command, shell=True, capture_output=True, text=True)
+                result = subprocess.run(command, capture_output=True, text=True)
 
                 # Note: alsactl may return non-zero exit codes for warnings, not just errors
                 # We should check if the control was actually created rather than just the exit code
@@ -871,11 +961,14 @@ class Soundcard:
             hw_index = self.get_hardware_index()
             if hw_index is not None:
                 result = subprocess.run(
-                    f"amixer -c {hw_index} | grep -q '{control_name}'",
-                    shell=True,
-                    capture_output=True
+                    ["amixer", "-c", str(hw_index)],
+                    capture_output=True,
+                    text=True,
                 )
-                return result.returncode == 0
+                if result.returncode != 0:
+                    return False
+                output = result.stdout or ""
+                return control_name in output
 
             return False
 

@@ -75,7 +75,7 @@ class DSPToolkit:
                     dsp_info = self._normalize_dsp_info(raw_info)
                     logging.debug(f"DSP detection response: {dsp_info}")
                     return dsp_info
-                except json.JSONDecodeError as e:
+                except ValueError as e:
                     logging.error(f"Failed to parse DSP detection response as JSON: {e}")
                     return {"status": "error"}
             else:
@@ -238,9 +238,10 @@ def main() -> int:
         # Default human-readable output
         dsp_info = toolkit.detect_dsp()
         if dsp_info:
-            status = dsp_info.get("status", "unknown")
+            status = toolkit._normalize_status(dsp_info.get("status"))
             if status == "detected":
-                dsp_name = dsp_info.get("detected_dsp", "Unknown")
+                detected_dsp = dsp_info.get("detected_dsp")
+                dsp_name = detected_dsp if isinstance(detected_dsp, str) else "Unknown"
                 print(f"DSP detected: {dsp_name}")
                 return 0
             else:

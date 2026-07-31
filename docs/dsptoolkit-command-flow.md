@@ -136,6 +136,7 @@ Exit behavior:
 
 - Returns `0` only when status is `detected`.
 - Returns `1` for unavailable/not detected/error states.
+- Status handling is normalized across modes: `--status-only`, `--json`, and default human-readable output all map unknown or invalid status values to `error`.
 
 ## Integration Points
 

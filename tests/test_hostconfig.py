@@ -148,10 +148,23 @@ class TestSanitizeHostname(unittest.TestCase):
         result = sanitize_hostname(long_hostname, max_length=30)
         self.assertLessEqual(len(result), 30)
 
+    def test_sanitize_non_positive_max_length_clamped(self):
+        """Test non-positive max_length values are clamped to 1."""
+        result_zero = sanitize_hostname('my host', max_length=0)
+        result_negative = sanitize_hostname('my host', max_length=-5)
+        self.assertEqual(result_zero, 'm')
+        self.assertEqual(result_negative, 'm')
+
     def test_sanitize_empty_result_fallback(self):
         """Test fallback to 'hifiberry' for empty result"""
         result = sanitize_hostname('!!!')
         self.assertEqual(result, 'hifiberry')
+
+    def test_sanitize_empty_result_fallback_respects_max_length(self):
+        """Test fallback hostname still respects max_length."""
+        result = sanitize_hostname('!!!', max_length=3)
+        self.assertEqual(result, 'hif')
+        self.assertLessEqual(len(result), 3)
 
     def test_sanitize_only_hyphens_fallback(self):
         """Test fallback for input that becomes only hyphens"""

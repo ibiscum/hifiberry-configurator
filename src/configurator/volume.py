@@ -57,6 +57,21 @@ def get_cached_card_index() -> Optional[int]:
 
     return _cached_card_index  # type: ignore[return-value]
 
+
+def get_cached_control_name() -> Optional[str]:
+    """Get the active mixer control name from the cached soundcard state."""
+    global _cached_soundcard
+
+    card_index = get_cached_card_index()
+    if card_index is None:
+        return None
+
+    # Recreate the Soundcard object if external state left cache partially initialized.
+    if _cached_soundcard is None:
+        _cached_soundcard = Soundcard()
+
+    return _cached_soundcard.get_mixer_control_name(use_softvol_fallback=True)  # type: ignore[return-value]
+
 def get_current_volume(card_index: Optional[int], control_name: Optional[str]) -> Optional[str]:
     """
     Get the current volume setting from ALSA
@@ -174,13 +189,7 @@ def store_volume() -> bool:
     try:
         # Store physical card volume if available
         card_index = get_cached_card_index()
-        control_name: Optional[str] = None
-
-        if card_index is not None:
-            # Get the cached soundcard instance
-            global _cached_soundcard
-            if _cached_soundcard is not None:
-                control_name = _cached_soundcard.get_mixer_control_name(use_softvol_fallback=True)  # type: ignore[assignment]
+        control_name = get_cached_control_name()
 
         if card_index is not None and control_name is not None:
             # Get current volume from physical card
@@ -252,13 +261,7 @@ def restore_volume() -> bool:
         if volume is not None and stored_card_index is not None and stored_control_name is not None:
             # Get current sound card information
             card_index = get_cached_card_index()
-            control_name: Optional[str] = None
-
-            if card_index is not None:
-                # Get the cached soundcard instance
-                global _cached_soundcard
-                if _cached_soundcard is not None:
-                    control_name = _cached_soundcard.get_mixer_control_name(use_softvol_fallback=True)  # type: ignore[assignment]
+            control_name = get_cached_control_name()
 
             if card_index is not None and control_name is not None:
                 # Check if the sound card has changed
@@ -295,6 +298,7 @@ def restore_volume() -> bool:
                     logging.info(f"PipeWire Master volume restored to {master_volume}")
                 else:
                     logging.error("Failed to restore PipeWire Master volume")
+                    success = False
             else:
                 logging.warning("No PipeWire Master volume setting found in configuration database")
 
@@ -306,6 +310,7 @@ def restore_volume() -> bool:
                     logging.info(f"PipeWire Capture volume restored to {capture_volume}")
                 else:
                     logging.error("Failed to restore PipeWire Capture volume")
+                    success = False
             else:
                 logging.warning("No PipeWire Capture volume setting found in configuration database")
         else:

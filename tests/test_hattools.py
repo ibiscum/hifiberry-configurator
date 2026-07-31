@@ -45,6 +45,7 @@ class TestGetHatInfo(unittest.TestCase):
         self.assertEqual(result['vendor'], 'HiFiBerry')
         self.assertEqual(result['product'], 'DAC+ Pro')
         self.assertEqual(result['uuid'], '12345678-1234-5678-1234-567812345678')
+        mock_hat.short_info.assert_called_once_with(debug=False)
 
     @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_success_with_unknown_values(self, mock_hat_class):
@@ -162,7 +163,7 @@ class TestGetHatInfo(unittest.TestCase):
         mock_hat_class.return_value = mock_hat
 
         result = get_hat_info(verbose=False)
-        self.assertEqual(result, {'vendor': None, 'product': None, 'uuid': None})
+        self.assertEqual(result, {'vendor': 'HiFiBerry', 'product': None, 'uuid': None})
 
     @patch('configurator.hattools.HatEEPROM')
     def test_get_hat_info_empty_response(self, mock_hat_class):
@@ -173,6 +174,39 @@ class TestGetHatInfo(unittest.TestCase):
 
         result = get_hat_info(verbose=False)
         self.assertEqual(result, {'vendor': None, 'product': None, 'uuid': None})
+
+    @patch('configurator.hattools.HatEEPROM')
+    def test_get_hat_info_non_dict_response(self, mock_hat_class):
+        """Test HAT info when short_info returns a non-dict value."""
+        mock_hat = MagicMock()
+        mock_hat.short_info.return_value = "not a dict"
+        mock_hat_class.return_value = mock_hat
+
+        result = get_hat_info(verbose=False)
+        self.assertEqual(result, {'vendor': None, 'product': None, 'uuid': None})
+
+    @patch('configurator.hattools.HatEEPROM')
+    def test_get_hat_info_non_string_fields(self, mock_hat_class):
+        """Test HAT info when success payload has non-string values."""
+        mock_hat = MagicMock()
+        mock_hat.short_info.return_value = {
+            'success': True,
+            'vendor': 123,
+            'product': ['DAC'],
+            'uuid': None
+        }
+        mock_hat_class.return_value = mock_hat
+
+        result = get_hat_info(verbose=False)
+        self.assertEqual(result, {'vendor': None, 'product': None, 'uuid': None})
+
+    def test_get_hat_info_without_hateeprom_verbose_warns(self):
+        """Test verbose warning when hateeprom module is unavailable."""
+        with patch('configurator.hattools.HatEEPROM', None):
+            with patch('configurator.hattools.logging.warning') as mock_warning:
+                result = get_hat_info(verbose=True)
+                self.assertEqual(result, {'vendor': None, 'product': None, 'uuid': None})
+                mock_warning.assert_called_once()
 
 
 class TestDefaultConstants(unittest.TestCase):
@@ -519,6 +553,17 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
             output = fake_out.getvalue().strip()
             self.assertIn(long_vendor, output)
             self.assertEqual(result, 0)
+
+    @patch('configurator.hattools.get_hat_info')
+    @patch('sys.argv', ['hattools'])
+    def test_main_with_missing_keys_uses_defaults(self, mock_get_info):
+        """Test main tolerates missing keys in returned info mapping."""
+        mock_get_info.return_value = {'vendor': 'HiFiBerry'}
+
+        with patch('sys.stdout', new=StringIO()) as fake_out:
+            result = main()
+            self.assertEqual(result, 0)
+            self.assertEqual(fake_out.getvalue().strip(), f"HiFiBerry:{DEFAULT_PRODUCT}")
 
 
 if __name__ == '__main__':

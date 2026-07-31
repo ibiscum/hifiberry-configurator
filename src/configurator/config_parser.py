@@ -20,17 +20,17 @@ CONFIG_DROP_IN_DIR = "/etc/configserver/conf.d"
 
 class ConfigParser:
     """Parser for the HiFiBerry Configuration Server config file"""
-    
+
     def __init__(self, config_file: Optional[str] = None):
         """
         Initialize the config parser
-        
+
         Args:
             config_file: Path to config file (defaults to /etc/configserver/configserver.json)
         """
         self.config_file = config_file or CONFIG_FILE
         self._config = None
-    
+
     @staticmethod
     def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
         """Deep-merge override into base. Dict values are merged recursively,
@@ -81,6 +81,14 @@ class ConfigParser:
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
 
+            if not isinstance(config, dict):
+                logger.error(
+                    "Invalid top-level JSON in config file %s: expected object, got %s",
+                    self.config_file,
+                    type(config).__name__,
+                )
+                return {}
+
             logger.debug(f"Loaded config from {self.config_file}")
 
             # Merge drop-in configs
@@ -95,59 +103,59 @@ class ConfigParser:
         except OSError as e:
             logger.error(f"Error loading config file {self.config_file}: {e}")
             return {}
-    
+
     def get_config(self) -> Dict[str, Any]:
         """
         Get the loaded configuration, loading it if necessary
-        
+
         Returns:
             Dictionary containing the configuration data
         """
         if self._config is None:
             self._config = self.load_config()
         return self._config
-    
+
     def get_section(self, section: str, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Get a specific section from the configuration
-        
+
         Args:
             section: Name of the section to retrieve
             default: Default value if section doesn't exist. If None, returns empty dict.
-            
+
         Returns:
             Dictionary containing the section data, or default/empty dict if not found
         """
         config = self.get_config()
         return config.get(section, default if default is not None else {})
-    
+
     def reload_config(self) -> Dict[str, Any]:
         """
         Force reload the configuration file
-        
+
         Returns:
             Dictionary containing the configuration data
         """
         self._config = None
         return self.load_config()
-    
+
     def has_section(self, section: str) -> bool:
         """
         Check if a section exists in the configuration
-        
+
         Args:
             section: Name of the section to check
-            
+
         Returns:
             True if section exists, False otherwise
         """
         config = self.get_config()
         return section in config
-    
+
     def get_config_file_path(self) -> str:
         """
         Get the path to the configuration file
-        
+
         Returns:
             Path to the configuration file
         """
@@ -161,29 +169,29 @@ def get_config_parser() -> ConfigParser:
     """
     Get the global configuration parser instance.
     Thread-safe singleton pattern.
-    
+
     Returns:
         ConfigParser instance
     """
     global _config_parser, _config_parser_lock
-    
+
     if _config_parser is None:
         # Lazy-initialize lock only when needed
         if _config_parser_lock is None:
             import threading
             _config_parser_lock = threading.Lock()
-        
+
         with _config_parser_lock:
             # Double-check pattern for thread safety
             if _config_parser is None:
                 _config_parser = ConfigParser()
-    
+
     return _config_parser
 
 def get_config() -> Dict[str, Any]:
     """
     Get the current configuration
-    
+
     Returns:
         Dictionary containing the configuration data
     """
@@ -192,11 +200,11 @@ def get_config() -> Dict[str, Any]:
 def get_config_section(section: str, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Get a specific section from the configuration
-    
+
     Args:
         section: Name of the section to retrieve
         default: Default value if section doesn't exist
-        
+
     Returns:
         Dictionary containing the section data
     """
@@ -205,7 +213,7 @@ def get_config_section(section: str, default: Optional[Dict[str, Any]] = None) -
 def reload_config() -> Dict[str, Any]:
     """
     Force reload the configuration file
-    
+
     Returns:
         Dictionary containing the configuration data
     """

@@ -4,14 +4,37 @@ pipewire.py - PipeWire volume control utility
 Provides functions to get/set volume for a given control name and list all available volume controls.
 """
 import subprocess
-import json
+import logging
+import math
+import re
 from typing import List, Optional
+
+
+PW_CLI_TIMEOUT = 5.0
+NAME_LINE_RE = re.compile(r'^\s*name\s*=\s*"([^"]+)"\s*$')
+VOLUME_LINE_RE = re.compile(r'^\s*volume\s*=\s*([0-9]*\.?[0-9]+)\s*$')
 
 def _run_pw_cli(args: List[str]) -> Optional[str]:
     try:
-        result = subprocess.run(["pw-cli"] + args, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["pw-cli"] + args,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=PW_CLI_TIMEOUT,
+        )
         return result.stdout
-    except Exception:
+    except FileNotFoundError:
+        logging.error("pw-cli command not found")
+        return None
+    except subprocess.TimeoutExpired:
+        logging.error("pw-cli command timed out")
+        return None
+    except subprocess.CalledProcessError as e:
+        logging.error(f"pw-cli command failed: {e.stderr.strip() if e.stderr else e}")
+        return None
+    except OSError as e:
+        logging.error(f"pw-cli execution error: {e}")
         return None
 
 def get_volume_controls() -> List[str]:
@@ -23,11 +46,9 @@ def get_volume_controls() -> List[str]:
         return []
     controls = []
     for line in output.splitlines():
-        if "name" in line:
-            # Example:    name = "alsa_output.pci-0000_00_1b.0.analog-stereo"
-            parts = line.strip().split('=')
-            if len(parts) == 2:
-                controls.append(parts[1].strip().strip('"'))
+        match = NAME_LINE_RE.match(line)
+        if match:
+            controls.append(match.group(1))
     return controls
 
 def get_volume(control_name: str) -> Optional[float]:
@@ -39,14 +60,12 @@ def get_volume(control_name: str) -> Optional[float]:
     if not output:
         return None
     for line in output.splitlines():
-        if "volume" in line:
-            # Example:    volume = 0.75
-            parts = line.strip().split('=')
-            if len(parts) == 2:
-                try:
-                    return float(parts[1].strip())
-                except ValueError:
-                    return None
+        match = VOLUME_LINE_RE.match(line)
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                return None
     return None
 
 def set_volume(control_name: str, volume: float) -> bool:
@@ -55,10 +74,30 @@ def set_volume(control_name: str, volume: float) -> bool:
     Volume should be a float between 0.0 and 1.0.
     Returns True if successful, False otherwise.
     """
+    if not math.isfinite(volume) or volume < 0.0 or volume > 1.0:
+        logging.error(f"Invalid volume value: {volume}")
+        return False
+
     try:
-        subprocess.run(["pw-cli", "set", control_name, "volume", str(volume)], check=True)
+        subprocess.run(
+            ["pw-cli", "set", control_name, "volume", str(volume)],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=PW_CLI_TIMEOUT,
+        )
         return True
-    except Exception:
+    except FileNotFoundError:
+        logging.error("pw-cli command not found")
+        return False
+    except subprocess.TimeoutExpired:
+        logging.error("pw-cli set command timed out")
+        return False
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to set volume: {e.stderr.strip() if e.stderr else e}")
+        return False
+    except OSError as e:
+        logging.error(f"pw-cli execution error: {e}")
         return False
 
 
@@ -67,9 +106,10 @@ def main():
     import sys
     def print_usage():
         print("Usage:")
-        print("  pipewire.py list")
-        print("  pipewire.py get <control_name>")
-        print("  pipewire.py set <control_name> <volume>")
+        print("  config-pipewire list")
+        print("  config-pipewire get <control_name>")
+        print("  config-pipewire set <control_name> <volume>")
+        print("  (volume must be between 0.0 and 1.0)")
 
     if len(sys.argv) < 2:
         print_usage()
@@ -91,6 +131,9 @@ def main():
         try:
             volume = float(sys.argv[3])
         except ValueError:
+            print("Volume must be a float between 0.0 and 1.0")
+            sys.exit(3)
+        if volume < 0.0 or volume > 1.0 or not math.isfinite(volume):
             print("Volume must be a float between 0.0 and 1.0")
             sys.exit(3)
         ok = set_volume(sys.argv[2], volume)

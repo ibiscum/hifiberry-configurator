@@ -34,7 +34,7 @@ try:
     GATTAttributePermissions: Any = getattr(_attr_module, "GATTAttributePermissions")
     GATTCharacteristicProperties: Any = getattr(_char_module, "GATTCharacteristicProperties")
     BlessServer: Any = getattr(_server_module, "BlessServer")
-except ImportError:
+except (ImportError, AttributeError):
     # Fallback for older bless versions or when types are unavailable
     GATTAttributePermissions: Any = Any
     GATTCharacteristicProperties: Any = Any
@@ -68,7 +68,6 @@ CHAR_WIFI_CONNECT_STATUS = f"{_BASE}0006"
 CHAR_BLE_CONTROL = f"{_BASE}0007"
 
 MAX_SCAN_RESULTS = 20
-
 
 class BLEProvisioningServer:
     """BLE GATT server for WiFi provisioning."""
@@ -122,11 +121,12 @@ class BLEProvisioningServer:
 
         for iface in cfg.get("interfaces", []):
             ip: str = iface.get("ipv4") or ""
-            if iface.get("type") == "wireless":
+            iface_type = iface.get("type")
+            if iface_type == "wireless":
                 if ip:
                     wifi_connected = True
                     wifi_ip = ip
-            else:
+            elif iface_type == "wired":
                 if ip:
                     eth_connected = True
                     eth_ip = ip
@@ -393,6 +393,8 @@ class BLEProvisioningServer:
     async def stop(self):
         """Stop the BLE server."""
         if self.server:
+            if self._shutdown_requested:
+                logger.info("BLE stop was requested via GATT control")
             logger.info("Stopping BLE GATT server")
             await self.server.stop()  # type: ignore
             self.server = None
@@ -461,18 +463,30 @@ def main() -> None:
         if has_network_connectivity():
             logger.info("Network connectivity detected — skipping BLE provisioning")
             sys.exit(1)  # non-zero → systemd skips ExecStart
+            return
         else:
             logger.info("No network connectivity — BLE provisioning should start")
             sys.exit(0)
+            return
 
     if args.stop:
-        subprocess.run(
+        stop_result = subprocess.run(
             ["systemctl", "stop", "ble-provisioning"],
             capture_output=True,
+            text=True,
             timeout=10,
             check=False,
         )
+        if stop_result.returncode != 0:
+            logger.error(
+                "Failed to stop ble-provisioning service (exit=%s): %s",
+                stop_result.returncode,
+                (stop_result.stderr or "").strip(),
+            )
+            sys.exit(1)
+            return
         sys.exit(0)
+        return
 
     if args.serve:
         provisioner = BLEProvisioningServer()

@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the execution flow of [src/config_parser.py](src/config_parser.py), which loads the main configurator JSON file and merges optional drop-in snippets.
+This document describes the execution flow of [src/configurator/config_parser.py](src/configurator/config_parser.py), which loads the main configurator JSON file and merges optional drop-in snippets.
 
 ## Role in the System
 
@@ -12,7 +12,7 @@ This document describes the execution flow of [src/config_parser.py](src/config_
 - section-level reads with defaults
 - deterministic drop-in merge behavior
 
-Current direct usage in handlers includes [src/handlers/systemd_handler.py](src/handlers/systemd_handler.py), which reads the `systemd` section to enforce service-operation permissions.
+Current direct usage in handlers includes [src/configurator/handlers/systemd_handler.py](src/configurator/handlers/systemd_handler.py), which reads the `systemd` section to enforce service-operation permissions.
 
 ## High-Level Flow
 
@@ -36,7 +36,7 @@ flowchart TD
 
 ## Configuration Sources
 
-Primary constants in [src/config_parser.py](src/config_parser.py):
+Primary constants in [src/configurator/config_parser.py](src/configurator/config_parser.py):
 
 - `CONFIG_FILE`: `/etc/configserver/configserver.json`
 - `CONFIG_DROP_IN_DIR`: `/etc/configserver/conf.d`
@@ -51,14 +51,14 @@ This allows tests or custom deployments to override `config_file` and keep drop-
 
 ### ConfigParser.__init__
 
-Function: [src/config_parser.py](src/config_parser.py)
+Function: [src/configurator/config_parser.py](src/configurator/config_parser.py)
 
 1. Stores selected `config_file` (defaulting to `CONFIG_FILE`).
 2. Initializes in-memory cache `self._config` as `None`.
 
 ### ConfigParser.load_config
 
-Function: [src/config_parser.py](src/config_parser.py)
+Function: [src/configurator/config_parser.py](src/configurator/config_parser.py)
 
 1. Verifies main file exists.
 2. Loads main JSON object from disk.
@@ -72,7 +72,7 @@ Error behavior:
 
 ### ConfigParser._load_drop_ins
 
-Function: [src/config_parser.py](src/config_parser.py)
+Function: [src/configurator/config_parser.py](src/configurator/config_parser.py)
 
 1. Computes `conf.d` path next to the main config file.
 2. Globs `*.json` files and processes them in sorted order.
@@ -84,7 +84,7 @@ Function: [src/config_parser.py](src/config_parser.py)
 
 ### ConfigParser._deep_merge
 
-Function: [src/config_parser.py](src/config_parser.py)
+Function: [src/configurator/config_parser.py](src/configurator/config_parser.py)
 
 Recursive merge rules:
 
@@ -95,7 +95,7 @@ Because drop-ins are processed in lexicographic order, later filenames win for o
 
 ### Read API
 
-Functions: [src/config_parser.py](src/config_parser.py)
+Functions: [src/configurator/config_parser.py](src/configurator/config_parser.py)
 
 - `get_config()`: returns cached merged config, loading on first access
 - `get_section(section, default)`: returns section dict or provided default
@@ -104,7 +104,7 @@ Functions: [src/config_parser.py](src/config_parser.py)
 
 ## Singleton and Thread-Safety
 
-Module-level accessors in [src/config_parser.py](src/config_parser.py):
+Module-level accessors in [src/configurator/config_parser.py](src/configurator/config_parser.py):
 
 - `get_config_parser()`
 - `get_config()`

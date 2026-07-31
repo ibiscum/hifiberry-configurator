@@ -318,6 +318,10 @@ def sanitize_hostname(pretty_hostname: str, max_length: int = 64) -> str:
         valid according to RFC 1123. Falls back to 'hifiberry' if sanitization
         results in empty string or leading hyphen.
     """
+    # Ensure max_length remains meaningful for hostname generation.
+    if max_length < 1:
+        max_length = 1
+
     # Convert to lowercase and replace spaces with hyphens
     hostname = pretty_hostname.lower().replace(' ', '-')
 
@@ -333,9 +337,9 @@ def sanitize_hostname(pretty_hostname: str, max_length: int = 64) -> str:
     # Ensure it doesn't end with a hyphen
     hostname = hostname.rstrip('-')
 
-    # If empty or starts with hyphen, use fallback
+    # If empty or starts with hyphen, use fallback that still honors max_length.
     if not hostname or hostname.startswith('-'):
-        hostname = 'hifiberry'
+        hostname = 'hifiberry'[:max_length]
 
     logger.debug("Sanitized '%s' to '%s'", pretty_hostname, hostname)
     return hostname

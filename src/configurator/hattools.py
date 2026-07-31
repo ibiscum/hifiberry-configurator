@@ -25,6 +25,13 @@ DEFAULT_PRODUCT: str = "no product"
 DEFAULT_UUID: str = "unknown"
 """Default UUID string when UUID is not found."""
 
+
+def _normalize_hat_field(value: object) -> Optional[str]:
+    """Normalize a HAT metadata field to optional string value."""
+    if not isinstance(value, str):
+        return None
+    return None if value == 'Unknown' else value
+
 def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
     """
     Return a dictionary with keys 'vendor', 'product', and 'uuid'.
@@ -40,6 +47,8 @@ def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
             logging.warning("hateeprom module not available, returning default values")
         return {"vendor": None, "product": None, "uuid": None}
 
+    empty_info: Dict[str, Optional[str]] = {"vendor": None, "product": None, "uuid": None}
+
     try:
         # Initialize HAT EEPROM interface
         hat = HatEEPROM()  # type: ignore
@@ -47,20 +56,25 @@ def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
         # Get HAT information using the short_info method
         info = hat.short_info(debug=False)  # type: ignore
 
-        if info['success']:
+        if not isinstance(info, dict):
+            if verbose:
+                logging.error("Invalid HAT EEPROM response type")
+            return empty_info
+
+        if info.get('success'):
             return {
-                "vendor": info['vendor'] if info['vendor'] != 'Unknown' else None,
-                "product": info['product'] if info['product'] != 'Unknown' else None,
-                "uuid": info['uuid'] if info['uuid'] != 'Unknown' else None
+                "vendor": _normalize_hat_field(info.get('vendor')),
+                "product": _normalize_hat_field(info.get('product')),
+                "uuid": _normalize_hat_field(info.get('uuid'))
             }
         else:
             # Return None values if reading failed
-            return {"vendor": None, "product": None, "uuid": None}
+            return empty_info
 
     except Exception as e:
         if verbose:
             logging.error(f"Error reading HAT information: {e}")
-        return {"vendor": None, "product": None, "uuid": None}
+        return empty_info
 
 def main() -> int:
     """Retrieve and display HAT information via command-line interface.
@@ -89,9 +103,12 @@ def main() -> int:
     info = get_hat_info(verbose=args.verbose)
 
     # Convert None values to default strings in main
-    vendor: str = info["vendor"] if info["vendor"] is not None else DEFAULT_VENDOR
-    product: str = info["product"] if info["product"] is not None else DEFAULT_PRODUCT
-    uuid: str = info["uuid"] if info["uuid"] is not None else DEFAULT_UUID
+    vendor_value = info.get("vendor")
+    product_value = info.get("product")
+    uuid_value = info.get("uuid")
+    vendor: str = vendor_value if isinstance(vendor_value, str) else DEFAULT_VENDOR
+    product: str = product_value if isinstance(product_value, str) else DEFAULT_PRODUCT
+    uuid: str = uuid_value if isinstance(uuid_value, str) else DEFAULT_UUID
 
     if args.all:
         print(f"{vendor}:{product}:{uuid}")

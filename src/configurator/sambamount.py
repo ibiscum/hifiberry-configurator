@@ -7,10 +7,12 @@ import logging
 import shutil
 import subprocess
 from typing import List, Dict, Optional, Tuple, Any
+from tempfile import NamedTemporaryFile
 from configurator.configdb import ConfigDB
 
 # Set up logging
 logger = logging.getLogger(__name__)
+MAX_MOUNT_SLOTS = 256
 
 def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
     """Configure logging based on verbosity level."""
@@ -21,13 +23,12 @@ def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
     else:
         log_level = logging.INFO
 
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
+    # Configure only this module logger to avoid global side effects.
+    logger.setLevel(log_level)
+    logger.propagate = False
 
-    # Remove existing handlers if any
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
 
     # Create console handler
     console_handler = logging.StreamHandler(stream=sys.stderr)
@@ -42,7 +43,27 @@ def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
     console_handler.setFormatter(formatter)
 
     # Add handler to logger
-    root_logger.addHandler(console_handler)
+    logger.addHandler(console_handler)
+
+
+def _safe_unlink(path: Optional[str]) -> None:
+    """Remove temporary files safely."""
+    if not path:
+        return
+    try:
+        if os.path.exists(path):
+            os.unlink(path)
+    except OSError as e:
+        logger.debug(f"Failed to remove temporary file {path}: {e}")
+
+
+def _iter_config_indices(db: ConfigDB) -> List[int]:
+    """Return all occupied smbmount indices, tolerating index gaps."""
+    indices: List[int] = []
+    for index in range(1, MAX_MOUNT_SLOTS + 1):
+        if db.get(f"smbmount.{index}.server", None):
+            indices.append(index)
+    return indices
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -53,13 +74,13 @@ def parse_arguments():
     command_group.add_argument('--add-mount', action='store_true',
                         help='Add a mount configuration to the config database')
     command_group.add_argument('--remove-mount', action='store_true',
-                        help='Remove a mount configuration from the config database and unmount if active')
+                        help='Remove a mount configuration from the config database')
     command_group.add_argument('--mount-all', action='store_true',
                         help='Mount all shares defined in the config database')
     command_group.add_argument('--mount', action='store_true',
-                        help='Mount a specific share (requires --id OR --server and --share)')
+                        help='Mount a specific share (requires --server and --share)')
     command_group.add_argument('--unmount', action='store_true',
-                        help='Unmount a specific share (requires --id OR --server and --share)')
+                        help='Unmount a specific share (requires --server and --share)')
     command_group.add_argument('--list-mounts', action='store_true',
                         help='List all configured mounts')
     command_group.add_argument('--list-mounted-dirs', action='store_true',
@@ -97,13 +118,11 @@ def read_mount_config(secure: bool = False) -> List[Dict[str, str]]:
     """
     db = ConfigDB()
     mounts = []
-    index = 1
-
-    while True:
+    for index in _iter_config_indices(db):
         prefix = f"smbmount.{index}"
         server = db.get(f"{prefix}.server", None)
         if not server:
-            break
+            continue
 
         share = db.get(f"{prefix}.share", "")
         mountpoint = db.get(f"{prefix}.mountpoint", "")
@@ -123,8 +142,6 @@ def read_mount_config(secure: bool = False) -> List[Dict[str, str]]:
             'options': options
         })
 
-        index += 1
-
     logger.debug(f"Read {len(mounts)} mount configurations from configdb")
     return mounts
 
@@ -142,13 +159,11 @@ def read_mount_config_for_display() -> List[Dict[str, Any]]:
     """
     db = ConfigDB()
     mounts: List[Dict[str, Any]] = []
-    index = 1
-
-    while True:
+    for index in _iter_config_indices(db):
         prefix = f"smbmount.{index}"
         server = db.get(f"{prefix}.server", None)
         if not server:
-            break
+            continue
 
         mounts.append({
             'id': index,
@@ -159,8 +174,6 @@ def read_mount_config_for_display() -> List[Dict[str, Any]]:
             'version': db.get(f"{prefix}.version", ""),
             'options': db.get(f"{prefix}.options", ""),
         })
-
-        index += 1
 
     logger.debug(f"Read {len(mounts)} mount configurations from configdb (display mode)")
     return mounts
@@ -179,8 +192,7 @@ def write_mount_config(mounts: List[Dict[str, str]]) -> bool:
         db = ConfigDB()
 
         # Clear existing configurations
-        index = 1
-        while db.get(f"smbmount.{index}.server", None):
+        for index in _iter_config_indices(db):
             prefix = f"smbmount.{index}"
             db.delete(f"{prefix}.server")
             db.delete(f"{prefix}.share")
@@ -189,7 +201,6 @@ def write_mount_config(mounts: List[Dict[str, str]]) -> bool:
             db.delete(f"{prefix}.password")
             db.delete(f"{prefix}.version")
             db.delete(f"{prefix}.options")
-            index += 1
 
         # Write new configurations
         for i, mount in enumerate(mounts, start=1):
@@ -342,7 +353,7 @@ def is_mounted(mountpoint: str) -> bool:
             with open('/proc/mounts', 'r') as f:
                 for line in f:
                     # Split the line: device mountpoint filesystem options
-                    logging.debug(f"/proc/mounts: {line.strip()}")
+                    logger.debug(f"/proc/mounts: {line.strip()}")
                     parts = line.strip().split()
                     if len(parts) >= 3:
                         device = parts[0]
@@ -403,14 +414,23 @@ def mount_cifs_share(server: str, share: str, mountpoint: str, username: Optiona
         logger.info(f"{mountpoint} is already mounted")
         return True, None
 
+    credentials_file_path: Optional[str] = None
+
     # Build mount options
     mount_opts = []
 
-    # Add credentials if provided
-    if username:
-        mount_opts.append(f"username={username}")
-    if password:
-        mount_opts.append(f"password={password}")
+    # Add credentials via temporary file to avoid exposing secrets in process args.
+    if username or password:
+        try:
+            with NamedTemporaryFile(mode='w', delete=False) as cred_file:
+                cred_file.write(f"username={username or ''}\n")
+                cred_file.write(f"password={password or ''}\n")
+                credentials_file_path = cred_file.name
+            mount_opts.append(f"credentials={credentials_file_path}")
+        except OSError as e:
+            error_msg = f"Error creating temporary credentials file: {e}"
+            logger.error(error_msg)
+            return False, error_msg
 
     # Add SMB version if specified
     if version:
@@ -503,6 +523,8 @@ def mount_cifs_share(server: str, share: str, mountpoint: str, username: Optiona
         logger.error(error_msg)
         logger.exception(f"Unexpected exception during mount operation for {server}/{share}")
         return False, error_msg
+    finally:
+        _safe_unlink(credentials_file_path)
 
     return False, "Unknown error occurred during mount operation"
 

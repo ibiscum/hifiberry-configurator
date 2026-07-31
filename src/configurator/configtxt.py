@@ -16,17 +16,17 @@ HIFIBERRY_DETECTION_DISABLED = "# HiFiBerry sound detection disabled"
 
 class ConfigTxt:
     """Manage Raspberry Pi /boot/firmware/config.txt configuration.
-    
+
     Provides methods to enable/disable various hardware interfaces,
     manage sound card configurations, and apply device tree overlays.
     """
 
     def __init__(self, file_path: str = "/boot/firmware/config.txt") -> None:
         """Initialize ConfigTxt with path to config.txt.
-        
+
         Args:
             file_path: Path to config.txt file (default: /boot/firmware/config.txt)
-            
+
         Raises:
             FileNotFoundError: If the config.txt file does not exist
         """
@@ -49,7 +49,7 @@ class ConfigTxt:
 
     def is_detection_disabled(self) -> bool:
         """Check if HiFiBerry detection is disabled in config.txt.
-        
+
         Returns:
             bool: True if HIFIBERRY_DETECTION_DISABLED comment is found, False otherwise
         """
@@ -73,17 +73,17 @@ class ConfigTxt:
         if self.is_detection_disabled():
             logging.info("HiFiBerry detection already disabled.")
             return
-        
+
         # Add the disabled comment at the end of the file
         self.lines.append(f"{HIFIBERRY_DETECTION_DISABLED}\n")
         logging.info("HiFiBerry detection disabled.")
 
     def _compute_checksum(self, lines: List[str]) -> str:
         """Compute SHA256 checksum of file lines.
-        
+
         Args:
             lines: List of file lines
-            
+
         Returns:
             Hexadecimal SHA256 hash of the content
         """
@@ -108,18 +108,33 @@ class ConfigTxt:
 
     def _update_line(self, prefix: str, new_line: str) -> None:
         """Update or add a line with the specified prefix.
-        
+
         Searches for a line starting with `prefix` and replaces it.
         If not found, appends `new_line` to the end of the file.
-        
+
         Args:
             prefix: String prefix to search for
             new_line: Complete line to insert/replace (should include newline)
         """
-        for i, line in enumerate(self.lines):
+        updated_lines: list[str] = []
+        found = False
+        for line in self.lines:
             if line.strip().startswith(prefix):
-                self.lines[i] = new_line
-                return
+                if not found:
+                    updated_lines.append(new_line)
+                    found = True
+                continue
+            updated_lines.append(line)
+
+        if not found:
+            updated_lines.append(new_line)
+
+        self.lines = updated_lines
+
+    def _append_unique_line(self, new_line: str) -> None:
+        """Append a line only if an identical entry is not already present."""
+        if any(line.strip() == new_line.strip() for line in self.lines):
+            return
         self.lines.append(new_line)
 
     def disable_onboard_sound(self) -> None:
@@ -134,7 +149,7 @@ class ConfigTxt:
 
     def _update_hdmi_sound(self, mode: str) -> None:
         """Update HDMI sound setting.
-        
+
         Args:
             mode: Either 'audio' to enable or 'noaudio' to disable
         """
@@ -170,23 +185,23 @@ class ConfigTxt:
     def enable_overlay(self, overlay: str, card_name: Optional[str] = None,
                        disable_eeprom: bool = False) -> None:
         """Enable a device tree overlay.
-        
+
         Optionally adds a HiFiBerry card name comment and disables EEPROM.
-        
+
         Args:
             overlay: Name of the overlay to enable (e.g., 'hifiberry-dac')
             card_name: Optional human-readable name for the card
             disable_eeprom: Whether to disable EEPROM read
         """
         if card_name:
-            self.lines.append(f"# HiFiBerry card: {card_name}\n")
+            self._append_unique_line(f"# HiFiBerry card: {card_name}\n")
         if disable_eeprom:
-            self.lines.append("force_eeprom_read=0\n")
-        self.lines.append(f"dtoverlay={overlay}\n")
+            self._append_unique_line("force_eeprom_read=0\n")
+        self._append_unique_line(f"dtoverlay={overlay}\n")
         logging.info(f"Overlay '{overlay}' enabled.")
 
     def remove_hifiberry_overlays(self) -> None:
-        """Remove all HiFiBerry overlays, detection comment, and EEPROM settings."""
+        """Remove all HiFiBerry overlays and associated HiFiBerry metadata."""
         original_length = len(self.lines)
         # Remove HiFiBerry overlays, detection disabled comment, card comments, etc.
         self.lines = [line for line in self.lines
@@ -199,7 +214,7 @@ class ConfigTxt:
 
     def _update_interface(self, interface: str, enable: bool) -> None:
         """Update interface enabled/disabled status.
-        
+
         Args:
             interface: Interface name (e.g., 'i2c_arm', 'spi')
             enable: True to enable, False to disable
@@ -260,17 +275,17 @@ class ConfigTxt:
 
     def autodetect_overlay(self) -> None:
         """Detect current sound card and add appropriate overlay.
-        
+
         Raises:
             Exception: If auto-detection fails
         """
         if self.is_detection_disabled():
             logging.info("HiFiBerry detection is disabled. Skipping auto-detect overlay.")
             return
-        
+
         # Remove existing HiFiBerry overlays before adding the new one
         self.remove_hifiberry_overlays()
-        
+
         try:
             soundcard = Soundcard()
             name: str | None = getattr(soundcard, 'name', None)
@@ -319,7 +334,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--remove-hifiberry", action="store_true",
-        help="Remove all HiFiBerry overlays."
+        help="Remove HiFiBerry overlays and associated HiFiBerry metadata."
     )
     parser.add_argument(
         "--disable-onboard-sound", action="store_true",
@@ -460,8 +475,6 @@ def main() -> int:
         return 0
     except Exception as e:
         logging.error(f"An error occurred: {e}")
-        if args.report_change:
-            return 1
         return 1
 
 

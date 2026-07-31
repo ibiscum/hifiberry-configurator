@@ -1,6 +1,11 @@
 import logging
 
 
+def _normalize_model_name(raw_model_name: str) -> str:
+    """Normalize model names read from device-tree files."""
+    return raw_model_name.strip().replace("\x00", "")
+
+
 class PiModel:
     def __init__(self):
         self.model_name = "unknown"
@@ -11,9 +16,12 @@ class PiModel:
         """Detect the Raspberry Pi model by reading the device tree."""
         try:
             with open("/proc/device-tree/model", "r") as model_file:
-                self.model_name = model_file.read().strip()
+                self.model_name = _normalize_model_name(model_file.read())
         except FileNotFoundError:
             logging.error("Device tree model file not found.")
+            return
+        except OSError as e:
+            logging.error(f"Failed to read device tree model file: {e}")
             return
 
         logging.info(f"Detected model: {self.model_name}")
@@ -34,13 +42,13 @@ class PiModel:
         elif "Pi Zero W" in self.model_name:
             self.version = "0W"
         elif "Pi Zero 2" in self.model_name:
-            self.version = "02W"
+            self.version = "0W2"
         elif "Pi 2 Model" in self.model_name:
             self.version = "2"
         elif "Pi 5 Model" in self.model_name:
             self.version = "5"
         elif "Compute Module 5" in self.model_name:
-            self.version = "5"
+            self.version = "CM5"
         else:
             logging.warning(f"Unknown Raspberry Pi model: {self.model_name}")
             self.version = "unknown"
@@ -58,9 +66,9 @@ class PiModel:
 
 def main():
     """Main function to detect and print the Raspberry Pi model."""
-    # Disable logging
-    logging.getLogger().setLevel(logging.CRITICAL)
-    
+    # Keep CLI output clean without mutating global logger state.
+    logging.disable(logging.CRITICAL)
+
     pi_model = PiModel()  # Detection happens here automatically
     print(f"Model: {pi_model.get_model_name()}")
     print(f"Version: {pi_model.get_version()}")

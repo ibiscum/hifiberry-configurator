@@ -44,6 +44,24 @@ except ImportError:
 CONFIG_DB = "/var/hifiberry/config.sqlite"
 KEY_FILE = "/etc/configdb.key"
 
+
+def _parse_bool(value: Any) -> bool:
+    """Parse flexible boolean inputs from API/CLI payloads."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value in (0, 1):
+            return bool(value)
+        raise ValueError("Boolean integer values must be 0 or 1")
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+        raise ValueError("Invalid boolean string")
+    raise ValueError("Invalid boolean value type")
+
 class ConfigDB:
     """
     A class to manage key/value pairs in a SQLite database
@@ -57,7 +75,8 @@ class ConfigDB:
             db_path: Path to the SQLite database file (default: /var/hifiberry/config.sqlite)
         """
         self.db_path = db_path
-        self._ensure_db_exists()
+        if not self._ensure_db_exists():
+            raise RuntimeError(f"Failed to initialize config database at {self.db_path}")
 
     def _ensure_db_exists(self) -> bool:
         """Create the database and table if they don't exist"""
@@ -70,18 +89,17 @@ class ConfigDB:
                 return False
 
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS config (
-                    key TEXT PRIMARY KEY,
-                    value TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS config (
+                        key TEXT PRIMARY KEY,
+                        value TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                conn.commit()
             return True
         except Exception as e:
             logging.error(f"Couldn't initialize database: {str(e)}")
@@ -150,11 +168,10 @@ class ConfigDB:
             The value for the key or default if not found
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM config WHERE key = ?", (key,))
-            result = cursor.fetchone()
-            conn.close()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM config WHERE key = ?", (key,))
+                result = cursor.fetchone()
 
             if result:
                 value = result[0]
@@ -162,7 +179,7 @@ class ConfigDB:
                     value = self.decrypt_value(value)
                 return value
             return default
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             logging.error(f"Error getting key {key}: {str(e)}")
             return default
 
@@ -201,14 +218,13 @@ class ConfigDB:
             # Encrypt value if needed
             encrypted_value = self.encrypt_value(value) if secure else value
 
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT OR REPLACE INTO config (key, value, modified_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-            ''', (key, encrypted_value))
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT OR REPLACE INTO config (key, value, modified_at)
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                ''', (key, encrypted_value))
+                conn.commit()
 
             if current_value is not None:
                 logging.debug(f"Updated key {key}")
@@ -231,11 +247,10 @@ class ConfigDB:
             True if successful, False otherwise
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM config WHERE key = ?", (key,))
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM config WHERE key = ?", (key,))
+                conn.commit()
             return True
         except Exception as e:
             logging.error(f"Error deleting key {key}: {str(e)}")
@@ -252,16 +267,15 @@ class ConfigDB:
             List of keys
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
 
-            if prefix:
-                cursor.execute("SELECT key FROM config WHERE key LIKE ?", (prefix + "%",))
-            else:
-                cursor.execute("SELECT key FROM config")
+                if prefix:
+                    cursor.execute("SELECT key FROM config WHERE key LIKE ?", (prefix + "%",))
+                else:
+                    cursor.execute("SELECT key FROM config")
 
-            keys = [row[0] for row in cursor.fetchall()]
-            conn.close()
+                keys = [row[0] for row in cursor.fetchall()]
             return keys
         except Exception as e:
             logging.error(f"Error listing keys: {str(e)}")
@@ -275,12 +289,11 @@ class ConfigDB:
             True if successful, False otherwise
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM config")
-            count = cursor.rowcount
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM config")
+                count = cursor.rowcount
+                conn.commit()
             logging.info(f"Cleared all {count} keys from config database")
             return True
         except Exception as e:
@@ -298,16 +311,15 @@ class ConfigDB:
             Dictionary of key/value pairs
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
 
-            if prefix:
-                cursor.execute("SELECT key, value FROM config WHERE key LIKE ?", (prefix + "%",))
-            else:
-                cursor.execute("SELECT key, value FROM config")
+                if prefix:
+                    cursor.execute("SELECT key, value FROM config WHERE key LIKE ?", (prefix + "%",))
+                else:
+                    cursor.execute("SELECT key, value FROM config")
 
-            result = {row[0]: row[1] for row in cursor.fetchall()}
-            conn.close()
+                result = {row[0]: row[1] for row in cursor.fetchall()}
             return result
         except Exception as e:
             logging.error(f"Error getting all keys: {str(e)}")
@@ -338,7 +350,7 @@ class ConfigDB:
         if request is None or jsonify is None:
             raise RuntimeError("Flask is not available. Install flask to use HTTP handlers.")
         try:
-            secure = request.args.get('secure', 'false').lower() == 'true'
+            secure = _parse_bool(request.args.get('secure', 'false'))
             default = request.args.get('default')
 
             value = self.get(key, default, secure)
@@ -403,7 +415,13 @@ class ConfigDB:
                 }), 400
 
             value = data['value']
-            secure = data.get('secure', False)
+            try:
+                secure = _parse_bool(data.get('secure', False))
+            except ValueError:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Field "secure" must be a boolean'
+                }), 400
 
             # Convert value to string if it's not already
             if not isinstance(value, str):
@@ -467,11 +485,12 @@ def main():
     parser = argparse.ArgumentParser(description='Manage HiFiBerry OS configuration database')
 
     # Create arguments for the different commands
-    parser.add_argument('--get', metavar='KEY', help='Get a value from the configuration')
-    parser.add_argument('--set', nargs=2, metavar=('KEY', 'VALUE'), help='Set a key/value pair')
-    parser.add_argument('--delete', metavar='KEY', help='Delete a key')
-    parser.add_argument('--list', action='store_true', help='List all keys')
-    parser.add_argument('--dump', action='store_true', help='Dump all key/value pairs')
+    command_group = parser.add_mutually_exclusive_group()
+    command_group.add_argument('--get', metavar='KEY', help='Get a value from the configuration')
+    command_group.add_argument('--set', nargs=2, metavar=('KEY', 'VALUE'), help='Set a key/value pair')
+    command_group.add_argument('--delete', metavar='KEY', help='Delete a key')
+    command_group.add_argument('--list', action='store_true', help='List all keys')
+    command_group.add_argument('--dump', action='store_true', help='Dump all key/value pairs')
     parser.add_argument('--prefix', help='Filter keys by prefix (for use with --list or --dump)')
     parser.add_argument('--default', help='Default value if key does not exist (for use with --get)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
@@ -482,6 +501,16 @@ def main():
 
     # Parse arguments
     args = parser.parse_args()
+
+    has_new_style = any([
+        bool(args.get),
+        bool(args.set),
+        bool(args.delete),
+        bool(args.list),
+        bool(args.dump),
+    ])
+    if has_new_style and args.command:
+        parser.error("Cannot combine option commands (--get/--set/--delete/--list/--dump) with legacy positional commands")
 
     # Set logging level
     if args.verbose:

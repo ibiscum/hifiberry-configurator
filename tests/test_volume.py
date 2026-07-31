@@ -332,27 +332,69 @@ class TestHeadphoneControls(unittest.TestCase):
 class TestStoreOperations(unittest.TestCase):
     """Tests for store_volume and restore_volume functions"""
 
+    def setUp(self):
+        """Reset cache before each test in this suite."""
+        import configurator.volume as volume_module
+        volume_module._cached_card_index = None
+        volume_module._cached_soundcard = None
+
+    @patch('configurator.volume.get_cached_control_name')
     @patch('configurator.volume.store_headphone_volume')
     @patch('configurator.volume.is_pipewire_available')
     @patch('configurator.volume.get_current_volume')
     @patch('configurator.volume.get_cached_card_index')
     @patch('configurator.volume.ConfigDB')
     def test_store_volume_success(self, mock_db_class, mock_card, mock_get_vol,
-                                   mock_pipewire, mock_store_headphone):
+                                    mock_pipewire, mock_store_headphone, mock_control_name):
         """Test successful volume storage"""
         mock_db = MagicMock()
         mock_db_class.return_value = mock_db
         mock_card.return_value = 0
+        mock_control_name.return_value = 'PCM'
         mock_get_vol.return_value = '100'
         mock_pipewire.return_value = False
         mock_store_headphone.return_value = False
 
-        with patch('configurator.volume._cached_soundcard') as mock_soundcard:
-            mock_soundcard.get_mixer_control_name.return_value = 'PCM'
-            result = store_volume()
+        result = store_volume()
 
         self.assertTrue(result)
         mock_db.set.assert_called()
+
+    @patch('configurator.volume.store_headphone_volume')
+    @patch('configurator.volume.is_pipewire_available')
+    @patch('configurator.volume.get_current_volume')
+    @patch('configurator.volume.get_cached_card_index')
+    @patch('configurator.volume.Soundcard')
+    @patch('configurator.volume.ConfigDB')
+    def test_store_volume_recovers_when_cached_soundcard_missing(
+        self,
+        mock_db_class,
+        mock_soundcard_class,
+        mock_card,
+        mock_get_vol,
+        mock_pipewire,
+        mock_store_headphone,
+    ):
+        """Store should recover if card index is cached but soundcard object is missing."""
+        mock_db = MagicMock()
+        mock_db_class.return_value = mock_db
+        mock_card.return_value = 0
+        mock_get_vol.return_value = '42'
+        mock_pipewire.return_value = False
+        mock_store_headphone.return_value = False
+
+        mock_soundcard = MagicMock()
+        mock_soundcard.get_mixer_control_name.return_value = 'PCM'
+        mock_soundcard_class.return_value = mock_soundcard
+
+        import configurator.volume as volume_module
+        volume_module._cached_soundcard = None
+
+        result = store_volume()
+
+        self.assertTrue(result)
+        mock_soundcard_class.assert_called_once()
+        mock_db.set.assert_any_call('system.volume.control', 'PCM')
 
     @patch('configurator.volume.store_headphone_volume')
     @patch('configurator.volume.get_cached_card_index')
@@ -365,14 +407,87 @@ class TestStoreOperations(unittest.TestCase):
 
         self.assertFalse(result)
 
+    @patch('configurator.volume.get_cached_control_name')
     @patch('configurator.volume.restore_headphone_volume')
     @patch('configurator.volume.is_pipewire_available')
     @patch('configurator.volume.set_volume')
     @patch('configurator.volume.get_cached_card_index')
     @patch('configurator.volume.ConfigDB')
     def test_restore_volume_success(self, mock_db_class, mock_card,
-                                     mock_set_vol, mock_pipewire, mock_restore_headphone):
+                                      mock_set_vol, mock_pipewire, mock_restore_headphone,
+                                      mock_control_name):
         """Test successful volume restoration"""
+        mock_db = MagicMock()
+        mock_db_class.return_value = mock_db
+        mock_db.get.side_effect = lambda key: {
+            'system.volume': '85',
+            'system.volume.card': '0',
+            'system.volume.control': 'PCM'
+        }.get(key)
+        mock_card.return_value = 0
+        mock_control_name.return_value = 'PCM'
+        mock_set_vol.return_value = True
+        mock_pipewire.return_value = False
+        mock_restore_headphone.return_value = False
+
+        result = restore_volume()
+
+        self.assertTrue(result)
+
+    @patch('configurator.volume.get_cached_control_name')
+    @patch('configurator.volume.restore_headphone_volume')
+    @patch('configurator.volume.is_pipewire_available')
+    @patch('configurator.volume.set_pipewire_volume')
+    @patch('configurator.volume.set_volume')
+    @patch('configurator.volume.get_cached_card_index')
+    @patch('configurator.volume.ConfigDB')
+    def test_restore_volume_fails_when_pipewire_restore_fails(
+        self,
+        mock_db_class,
+        mock_card,
+        mock_set_vol,
+        mock_set_pipewire,
+        mock_pipewire,
+        mock_restore_headphone,
+        mock_control_name,
+    ):
+        """PipeWire restore failures should propagate to overall restore result."""
+        mock_db = MagicMock()
+        mock_db_class.return_value = mock_db
+        mock_db.get.side_effect = lambda key: {
+            'system.volume': '70',
+            'system.volume.card': '0',
+            'system.volume.control': 'PCM',
+            'system.volume.pipewire.master': '55',
+            'system.volume.pipewire.capture': '60',
+        }.get(key)
+        mock_card.return_value = 0
+        mock_control_name.return_value = 'PCM'
+        mock_set_vol.return_value = True
+        mock_pipewire.return_value = True
+        mock_restore_headphone.return_value = False
+        mock_set_pipewire.side_effect = [False, True]
+
+        result = restore_volume()
+
+        self.assertFalse(result)
+
+    @patch('configurator.volume.restore_headphone_volume')
+    @patch('configurator.volume.is_pipewire_available')
+    @patch('configurator.volume.set_volume')
+    @patch('configurator.volume.get_cached_card_index')
+    @patch('configurator.volume.Soundcard')
+    @patch('configurator.volume.ConfigDB')
+    def test_restore_volume_recovers_when_cached_soundcard_missing(
+        self,
+        mock_db_class,
+        mock_soundcard_class,
+        mock_card,
+        mock_set_vol,
+        mock_pipewire,
+        mock_restore_headphone,
+    ):
+        """Restore should recover if card index is cached but soundcard object is missing."""
         mock_db = MagicMock()
         mock_db_class.return_value = mock_db
         mock_db.get.side_effect = lambda key: {
@@ -385,11 +500,17 @@ class TestStoreOperations(unittest.TestCase):
         mock_pipewire.return_value = False
         mock_restore_headphone.return_value = False
 
-        with patch('configurator.volume._cached_soundcard') as mock_soundcard:
-            mock_soundcard.get_mixer_control_name.return_value = 'PCM'
-            result = restore_volume()
+        mock_soundcard = MagicMock()
+        mock_soundcard.get_mixer_control_name.return_value = 'PCM'
+        mock_soundcard_class.return_value = mock_soundcard
+
+        import configurator.volume as volume_module
+        volume_module._cached_soundcard = None
+
+        result = restore_volume()
 
         self.assertTrue(result)
+        mock_soundcard_class.assert_called_once()
 
 
 class TestListAvailableControls(unittest.TestCase):

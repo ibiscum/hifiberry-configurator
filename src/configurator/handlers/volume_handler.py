@@ -66,10 +66,21 @@ class VolumeHandler:
             volume, control_name = get_headphone_volume()  # type: ignore[arg-type]
 
             if volume is not None:
+                try:
+                    parsed_volume = int(float(volume))
+                except (ValueError, TypeError):
+                    return error_response(
+                        jsonify,
+                        "Invalid headphone volume value returned by backend",
+                        "invalid_headphone_volume_value",
+                        500,
+                        system_error=str(volume),
+                    )
+
                 return jsonify({  # type: ignore[return-value]
                     "status": "success",
                     "data": {
-                        "volume": int(volume),
+                        "volume": parsed_volume,
                         "control": control_name
                     }
                 })

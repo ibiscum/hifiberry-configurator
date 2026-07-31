@@ -2,14 +2,14 @@
 
 ## Scope
 
-This document describes the execution flow of [src/hostname_utils.py](src/hostname_utils.py), which provides shared hostname helper functions for API handlers and backend modules.
+This document describes the execution flow of [src/configurator/hostname_utils.py](src/configurator/hostname_utils.py), which provides shared hostname helper functions for API handlers and backend modules.
 
 ## Entry Points
 
 Primary consumers:
 
-- [src/handlers/hostname_handler.py](src/handlers/hostname_handler.py)
-- [src/systeminfo.py](src/systeminfo.py)
+- [src/configurator/handlers/hostname_handler.py](src/configurator/handlers/hostname_handler.py)
+- [src/configurator/systeminfo.py](src/configurator/systeminfo.py)
 
 Key exported helpers:
 
@@ -47,7 +47,7 @@ flowchart TD
 
 ### get_hostnames
 
-Function: [src/hostname_utils.py](src/hostname_utils.py)
+Function: [src/configurator/hostname_utils.py](src/configurator/hostname_utils.py)
 
 1. Executes `hostnamectl hostname`.
 2. Executes `hostnamectl --pretty`.
@@ -62,7 +62,7 @@ Behavior notes:
 
 ### get_hostnames_with_fallback
 
-Function: [src/hostname_utils.py](src/hostname_utils.py)
+Function: [src/configurator/hostname_utils.py](src/configurator/hostname_utils.py)
 
 1. Calls `get_hostnames()`.
 2. If `pretty_hostname` is `None`, sets it to `hostname`.
@@ -72,21 +72,21 @@ This gives callers a display-friendly pretty hostname even when no explicit pret
 
 ### validate_hostname
 
-Function: [src/hostname_utils.py](src/hostname_utils.py)
+Function: [src/configurator/hostname_utils.py](src/configurator/hostname_utils.py)
 
 - Delegates validation to `hostconfig.validate_hostname`.
 - Keeps validation rules centralized in one backend implementation.
 
 ### sanitize_hostname
 
-Function: [src/hostname_utils.py](src/hostname_utils.py)
+Function: [src/configurator/hostname_utils.py](src/configurator/hostname_utils.py)
 
 - Delegates sanitization to `hostconfig.sanitize_hostname` with `max_length=64`.
 - Ensures API and CLI layers share identical normalization behavior.
 
 ### validate_pretty_hostname
 
-Function: [src/hostname_utils.py](src/hostname_utils.py)
+Function: [src/configurator/hostname_utils.py](src/configurator/hostname_utils.py)
 
 Validation rules:
 
@@ -99,14 +99,14 @@ Returns `True` only when all checks pass.
 
 ### set_hostname
 
-Function: [src/hostname_utils.py](src/hostname_utils.py)
+Function: [src/configurator/hostname_utils.py](src/configurator/hostname_utils.py)
 
 - Delegates to `hostconfig.set_hostname_with_hosts_update`.
 - Side effects are inherited from hostconfig (hostnamectl + `/etc/hosts` reconciliation).
 
 ### set_pretty_hostname
 
-Function: [src/hostname_utils.py](src/hostname_utils.py)
+Function: [src/configurator/hostname_utils.py](src/configurator/hostname_utils.py)
 
 1. Executes `hostnamectl set-hostname --pretty <pretty_hostname>`.
 2. Returns `True` on command success.
@@ -114,7 +114,7 @@ Function: [src/hostname_utils.py](src/hostname_utils.py)
 
 ## API Integration
 
-In [src/handlers/hostname_handler.py](src/handlers/hostname_handler.py):
+In [src/configurator/handlers/hostname_handler.py](src/configurator/handlers/hostname_handler.py):
 
 - `handle_get_hostname()` uses `get_hostnames_with_fallback()`.
 - `handle_set_hostname()` uses:
@@ -124,6 +124,10 @@ In [src/handlers/hostname_handler.py](src/handlers/hostname_handler.py):
   - `set_pretty_hostname()`
 
 This module acts as a normalization and orchestration layer between HTTP input handling and hostconfig system-side operations.
+
+Note:
+
+- Hostname writes in the handler currently call `set_hostname_with_hosts_update()` directly from `hostconfig`, while pretty-hostname writes use `set_pretty_hostname()` from this module.
 
 ## Side Effects
 

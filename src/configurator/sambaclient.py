@@ -2,15 +2,19 @@
 
 import subprocess
 import ipaddress
-import netifaces
 import re
 import sys
 import argparse
 import logging
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 import shutil
 import os
 from tempfile import NamedTemporaryFile
+
+try:
+    import netifaces
+except ImportError:  # pragma: no cover - depends on runtime environment
+    netifaces = None  # type: ignore[assignment]
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -23,47 +27,87 @@ def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
         log_level = logging.DEBUG
     else:
         log_level = logging.INFO
-    
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-    
-    # Remove existing handlers if any
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-    
+
+    # Configure only this module logger to avoid global side effects.
+    logger.setLevel(log_level)
+    logger.propagate = False
+
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+
     # Create console handler that sends to stderr
     console_handler = logging.StreamHandler(stream=sys.stderr)
     console_handler.setLevel(log_level)
-    
+
     # Create formatter and add it to the handler
     if verbose:
         formatter = logging.Formatter('%(levelname)s: %(message)s')
     else:
         formatter = logging.Formatter('%(message)s')
-    
+
     console_handler.setFormatter(formatter)
-    
+
     # Add handler to logger
-    root_logger.addHandler(console_handler)
+    logger.addHandler(console_handler)
+
+
+def _safe_unlink(path: Optional[str]) -> None:
+    """Remove temporary files safely."""
+    if not path:
+        return
+    try:
+        if os.path.exists(path):
+            os.unlink(path)
+    except OSError as e:
+        logger.debug(f"Failed to remove temporary credentials file: {e}")
+
+
+def _apply_auth_args(
+    cmd: List[str],
+    username: Optional[str],
+    password: Optional[str],
+    credentials_file: Optional[str],
+) -> Tuple[Optional[str], Optional[str]]:
+    """Apply SMB authentication arguments and return temp credentials file path if created."""
+    if credentials_file:
+        if os.path.isfile(credentials_file):
+            cmd.extend(['--authentication-file', credentials_file])
+            return None, None
+        return None, f"Credentials file not found: {credentials_file}"
+
+    if username:
+        cmd.extend(['-U', username])
+        if password:
+            with NamedTemporaryFile(mode='w', delete=False) as cred_file:
+                cred_file.write(f"username={username}\npassword={password}\n")
+                cred_file_path = cred_file.name
+            cmd.extend(['--authentication-file', cred_file_path])
+            return cred_file_path, None
+
+        # Explicitly disable password prompt to keep this non-interactive.
+        cmd.append('-N')
+        return None, None
+
+    cmd.append('-N')
+    return None, None
 
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='SMB/CIFS client tools')
-    
+
     # Add common authentication arguments
     parser.add_argument('-u', '--user', help='Username for authentication')
     parser.add_argument('-p', '--password', help='Password for authentication')
     parser.add_argument('-c', '--credentials', help='Path to credentials file')
-    
+
     # Add SMB version argument
-    parser.add_argument('--smbversion', choices=['SMB1', 'SMB2', 'SMB3'], 
+    parser.add_argument('--smbversion', choices=['SMB1', 'SMB2', 'SMB3'],
                         help='Specify SMB version to use')
-    
+
     # Add verbosity arguments
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('-q', '--quiet', action='store_true', help='Suppress non-essential output')
-    
+
     # Add mutually exclusive command arguments
     command_group = parser.add_mutually_exclusive_group(required=True)
     command_group.add_argument('--list-file-servers', action='store_true',
@@ -74,43 +118,59 @@ def parse_arguments():
                               help='Detect SMB version of specified server')
     command_group.add_argument('--list-shares', metavar='SERVER',
                               help='List shares on specified server')
-    
+
     # Add format argument for list-shares
     parser.add_argument('--long', action='store_true',
                         help='Use detailed format when listing shares')
-    
+
     return parser.parse_args()
 
 def get_broadcast_addresses() -> List[str]:
     """Get broadcast addresses for all active network interfaces."""
     broadcast_addresses = []
-    
+
+    if netifaces is None:
+        logger.error("netifaces module not available")
+        return broadcast_addresses
+
     for interface in netifaces.interfaces():
-        addrs = netifaces.ifaddresses(interface)
-        
+        try:
+            addrs = netifaces.ifaddresses(interface)
+        except (OSError, ValueError) as e:
+            logger.debug(f"Skipping interface {interface}: {e}")
+            continue
+
         # Check for IPv4 addresses
         if netifaces.AF_INET in addrs:
             for addr in addrs[netifaces.AF_INET]:
                 if 'broadcast' in addr:
                     broadcast_addresses.append(addr['broadcast'])
-    
+
     return broadcast_addresses
 
 
 def get_local_networks() -> List[Tuple[ipaddress.IPv4Network, str]]:
     """Get all directly connected networks."""
     networks = []
-    
+
+    if netifaces is None:
+        logger.error("netifaces module not available")
+        return networks
+
     for interface in netifaces.interfaces():
-        addrs = netifaces.ifaddresses(interface)
-        
+        try:
+            addrs = netifaces.ifaddresses(interface)
+        except (OSError, ValueError) as e:
+            logger.debug(f"Skipping interface {interface}: {e}")
+            continue
+
         # Check for IPv4 addresses
         if netifaces.AF_INET in addrs:
             for addr in addrs[netifaces.AF_INET]:
                 if 'addr' in addr and 'netmask' in addr:
                     ip = addr['addr']
                     netmask = addr['netmask']
-                    
+
                     # Create network object
                     try:
                         netmask_obj = ipaddress.IPv4Address(netmask)
@@ -120,7 +180,7 @@ def get_local_networks() -> List[Tuple[ipaddress.IPv4Network, str]]:
                         networks.append((network, interface))
                     except (ValueError, AttributeError):
                         continue
-    
+
     return networks
 
 
@@ -139,13 +199,13 @@ def is_on_local_network(ip: str, local_networks: List[Tuple[ipaddress.IPv4Networ
 def find_smb_servers(broadcast_address: str) -> List[Dict[str, str]]:
     """Find SMB servers using nmblookup for a specific broadcast address."""
     servers = []
-    
+
     try:
         # Run nmblookup command
         cmd = ["nmblookup", "-B", broadcast_address, "--", "WORKGROUP"]
         logger.debug(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-        
+
         if result.returncode == 0:
             # Process output lines
             for line in result.stdout.splitlines():
@@ -164,7 +224,7 @@ def find_smb_servers(broadcast_address: str) -> List[Dict[str, str]]:
                     })
     except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
         logger.error(f"Error querying {broadcast_address}: {e}")
-    
+
     return servers
 
 
@@ -178,11 +238,11 @@ def is_file_server(ip_address: str) -> Optional[str]:
         cmd = ["nmblookup", "-A", ip_address]
         logger.debug(f"Checking if {ip_address} is a file server...")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-        
+
         if result.returncode == 0:
             hostname = None
             is_file_service = False
-            
+
             # First find the hostname from <00> entry
             for line in result.stdout.splitlines():
                 # Look for lines containing <00> which represents the computer name
@@ -193,14 +253,14 @@ def is_file_server(ip_address: str) -> Optional[str]:
                         hostname = parts[0]
                         logger.debug(f"Found hostname: {hostname}")
                         break
-            
+
             # Then check for file service (<20>)
             for line in result.stdout.splitlines():
                 if '<20>' in line and 'ACTIVE' in line:
                     is_file_service = True
                     logger.debug(f"{ip_address} is a file server")
                     break
-            
+
             # Return hostname if it's a file server
             if hostname and is_file_service:
                 return hostname
@@ -208,27 +268,27 @@ def is_file_server(ip_address: str) -> Optional[str]:
                 logger.debug(f"{ip_address} ({hostname}) is not a file server")
             else:
                 logger.debug(f"{ip_address} hostname not found")
-    
+
     except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
         logger.error(f"Error checking if {ip_address} is a file server: {e}")
-    
+
     return None
 
 
-def get_host_info(ip_address: str) -> Dict[str, str]:
+def get_host_info(ip_address: str) -> Dict[str, Any]:
     """Get detailed host information for an IP address using nmblookup."""
-    host_info = {
+    host_info: Dict[str, Any] = {
         'hostname': '',
         'workgroup': '',
         'services': []
     }
-    
+
     try:
         # Run nmblookup command with reverse lookup
         cmd = ["nmblookup", "-A", ip_address]
         logger.debug(f"Getting detailed info for {ip_address}...")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-        
+
         if result.returncode == 0:
             # Process output lines to find hostname and service info
             for line in result.stdout.splitlines():
@@ -248,34 +308,34 @@ def get_host_info(ip_address: str) -> Dict[str, str]:
                         logger.debug("Found file server service")
     except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
         logger.error(f"Error querying detailed info for {ip_address}: {e}")
-    
+
     return host_info
 
 
-def list_all_servers() -> List[Dict[str, str]]:
+def list_all_servers() -> List[Dict[str, Any]]:
     """List all SMB servers on the network by querying all broadcast addresses."""
     all_servers = []
     broadcast_addresses = get_broadcast_addresses()
     local_networks = get_local_networks()
-    
+
     if not broadcast_addresses:
         logger.error("No broadcast addresses found on local interfaces.")
         return []
-    
+
     logger.info(f"Scanning {len(broadcast_addresses)} broadcast addresses for SMB servers...")
-    
+
     for broadcast in broadcast_addresses:
         logger.debug(f"Scanning broadcast address: {broadcast}")
         servers = find_smb_servers(broadcast)
         all_servers.extend(servers)
-    
+
     # Remove duplicates based on IP address and filter for directly connected networks
     unique_servers = []
     seen_ips = set()
     for server in all_servers:
         if server['ip'] not in seen_ips and is_on_local_network(server['ip'], local_networks):
             seen_ips.add(server['ip'])
-            
+
             # Add network information to server data
             for network, interface in local_networks:
                 if ipaddress.IPv4Address(server['ip']) in network:
@@ -283,7 +343,7 @@ def list_all_servers() -> List[Dict[str, str]]:
                     server['interface'] = interface
                     logger.debug(f"Server {server['ip']} is on network {network} (interface {interface})")
                     break
-            
+
             # Check if it's a file server
             file_server_hostname = is_file_server(server['ip'])
             if file_server_hostname:
@@ -291,12 +351,11 @@ def list_all_servers() -> List[Dict[str, str]]:
                 server['hostname'] = file_server_hostname
                 server['services'] = ['File Server']
                 # Keep the workgroup from initial discovery if not already set
-                if 'workgroup' not in server:
-                    server['workgroup'] = server.get('workgroup', '')
+                server.setdefault('workgroup', '')
                 logger.info(f"Found file server: {server['ip']} ({file_server_hostname})")
             else:
                 server['is_file_server'] = False
-                
+
                 # Get detailed host information only if it's not identified as a file server
                 logger.debug(f"Querying detailed information for {server['ip']}...")
                 host_info = get_host_info(server['ip'])
@@ -305,24 +364,24 @@ def list_all_servers() -> List[Dict[str, str]]:
                     'workgroup': host_info['workgroup'] or server.get('workgroup', ''),
                     'services': host_info['services']
                 })
-            
+
             unique_servers.append(server)
-    
+
     logger.info(f"Found {len(unique_servers)} unique SMB servers on local networks.")
     return unique_servers
 
 
-def check_smb_connection(server: str, username: Optional[str] = None, password: Optional[str] = None, 
+def check_smb_connection(server: str, username: Optional[str] = None, password: Optional[str] = None,
                         credentials_file: Optional[str] = None) -> Tuple[bool, Optional[str]]:
     """
     Check if a connection to the specified SMB server is possible with the given credentials.
-    
+
     Args:
         server: The server address (IP or hostname)
         username: Optional username for authentication
         password: Optional password for authentication
         credentials_file: Optional path to credentials file
-        
+
     Returns:
         Tuple of (success: bool, error_message: Optional[str])
     """
@@ -330,46 +389,21 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
     if not shutil.which('smbclient'):
         logger.error("smbclient command not found. Please install samba-client package.")
         return False, "smbclient command not found"
-    
+
     # Build the command
     cmd = ['smbclient', '-L', server]
-    
-    # Handle authentication
-    if credentials_file:
-        # Use provided credentials file
-        if os.path.isfile(credentials_file):
-            cmd.extend(['--authentication-file', credentials_file])
-        else:
-            logger.error(f"Credentials file not found: {credentials_file}")
-            return False, f"Credentials file not found: {credentials_file}"
-    elif username:
-        cmd.extend(['-U', username])
-        
-        # If password is provided, use a credentials file (safer than command line)
-        if password:
-            # Create a temporary credentials file
-            with NamedTemporaryFile(mode='w', delete=False) as cred_file:
-                cred_file.write(f"username={username}\npassword={password}\n")
-                cred_file_path = cred_file.name
-            
-            cmd.extend(['--authentication-file', cred_file_path])
-    else:
-        # No authentication provided, try guest/anonymous access
-        cmd.append('-N')
-    
+    cred_file_path, auth_error = _apply_auth_args(cmd, username, password, credentials_file)
+    if auth_error:
+        logger.error(auth_error)
+        return False, auth_error
+
     logger.debug(f"Running command: smbclient -L {server} [auth details omitted]")
-    
+
     try:
         # Run the command
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        
-        # Clean up the temporary credentials file if it was created
-        if username and password and 'cred_file_path' in locals():
-            try:
-                os.unlink(cred_file_path)
-            except Exception as e:
-                logger.debug(f"Failed to remove temporary credentials file: {e}")
-        
+        _safe_unlink(cred_file_path)
+
         # Check if the command was successful
         if result.returncode == 0:
             logger.debug("Connection successful")
@@ -379,10 +413,10 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
             logger.debug(f"Connection failed with return code {result.returncode}")
             logger.debug(f"Error message (stderr): {result.stderr}")
             logger.debug(f"Output message (stdout): {result.stdout}")
-            
+
             # Analyze both stderr and stdout for error information
             error_output = (result.stderr + " " + result.stdout).lower()
-            
+
             if "connection refused" in error_output or "no route to host" in error_output:
                 return False, f"Server {server} is not reachable"
             elif "host not found" in error_output or "name or service not known" in error_output:
@@ -409,7 +443,7 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
             else:
                 # Generic error with return code
                 return False, f"Connection failed with error code {result.returncode}"
-    
+
     except subprocess.TimeoutExpired:
         logger.error(f"Connection to {server} timed out")
         return False, f"Connection to {server} timed out"
@@ -417,14 +451,8 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
         logger.error(f"Error connecting to {server}: {e}")
         return False, f"Connection error: {str(e)}"
     finally:
-        # Make sure to clean up the credentials file in case of exceptions
-        if username and password and 'cred_file_path' in locals():
-            try:
-                if os.path.exists(cred_file_path):
-                    os.unlink(cred_file_path)
-            except Exception:
-                pass
-    
+        _safe_unlink(cred_file_path)
+
     return False, "Unknown connection error"
 
 
@@ -432,35 +460,34 @@ def list_smb_shares(server: str, username: Optional[str] = None, password: Optio
                    credentials_file: Optional[str] = None, smb_version: Optional[str] = None) -> Tuple[List[Dict[str, str]], str]:
     """
     List available shares on the specified SMB server.
-    
+
     Args:
         server: The server address (IP or hostname)
         username: Optional username for authentication
         password: Optional password for authentication
         credentials_file: Optional path to credentials file
         smb_version: Optional SMB version to use
-        
+
     Returns:
         Tuple of (list of dictionaries containing share information, detected SMB version)
     """
     shares = []
-    is_share_line = False
     detected_version = "Unknown"
-    
+
     # Check if smbclient is available
     if not shutil.which('smbclient'):
         logger.error("smbclient command not found. Please install samba-client package.")
         return shares, detected_version
-    
+
     # SMB versions to try if not specified
     smb_versions_to_try = [smb_version] if smb_version else ["SMB3", "SMB2", "SMB1"]
-    
+
     for version in smb_versions_to_try:
         logger.debug(f"Trying with {version}")
-        
+
         # Build the command
         cmd = ['smbclient', '-L', server]
-        
+
         # Add SMB version parameter
         if version == "SMB1":
             cmd.append('--option=client min protocol=NT1')
@@ -469,102 +496,78 @@ def list_smb_shares(server: str, username: Optional[str] = None, password: Optio
             cmd.append('--option=client max protocol=SMB2')
         elif version == "SMB3":
             cmd.append('--option=client min protocol=SMB3')
-        
-        # Handle authentication
-        cred_file_path = None
-        if credentials_file:
-            # Use provided credentials file
-            if os.path.isfile(credentials_file):
-                cmd.extend(['--authentication-file', credentials_file])
-            else:
-                logger.error(f"Credentials file not found: {credentials_file}")
-                continue
-        elif username:
-            cmd.extend(['-U', username])
-            
-            # If password is provided, use a credentials file (safer than command line)
-            if password:
-                # Create a temporary credentials file
-                with NamedTemporaryFile(mode='w', delete=False) as cred_file:
-                    cred_file.write(f"username={username}\npassword={password}\n")
-                    cred_file_path = cred_file.name
-                
-                cmd.extend(['--authentication-file', cred_file_path])
-        else:
-            # No authentication provided, try guest/anonymous access
-            cmd.append('-N')
-        
+
+        cred_file_path, auth_error = _apply_auth_args(cmd, username, password, credentials_file)
+        if auth_error:
+            logger.error(auth_error)
+            continue
+
         logger.debug(f"Running command: {' '.join(cmd).replace(server, 'SERVER')} [auth details omitted]")
-        
+
         try:
             # Run the command
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            
-            # Clean up the temporary credentials file if it was created
-            if cred_file_path and os.path.exists(cred_file_path):
-                try:
-                    os.unlink(cred_file_path)
-                    cred_file_path = None  # Reset so we don't try to delete it again
-                except Exception as e:
-                    logger.debug(f"Failed to remove temporary credentials file: {e}")
-            
+            _safe_unlink(cred_file_path)
+            cred_file_path = None
+
             if result.returncode == 0:
                 logger.debug(f"Connection successful with {version}, parsing shares")
                 detected_version = version
                 shares = []  # Reset shares list for each version attempt
-                
+
                 # Parse the output to extract shares
                 lines = result.stdout.splitlines()
                 in_share_section = False
-                
+
                 for i, line in enumerate(lines):
                     # Look for the Sharename header line
                     if "Sharename" in line and "Type" in line and "Comment" in line:
                         in_share_section = True
-                        logging.debug("Found share section header")
+                        logger.debug("Found share section header")
                         # Skip the header and the separator line
                         continue
-                    
-                    # Check if this line is a potential share entry (starts with whitespace)
-                    logging.debug(f"Processing line: {line.strip()}")
-                    if line.startswith(" ") or line.startswith("\t"):
-                        logging.debug("Line starts with space or tab, indicating possible share entry")
-                        is_share_line = True
-                    elif line and len(line) > 0:
-                        # Check if the line starts with a character (not whitespace)
-                        logging.debug(f"Line starts with character {line[0]} (ascii: {ord(line[0])})")
-                        is_share_line = False
-                    else:
-                        is_share_line = False
 
-                    if in_share_section and is_share_line:
+                    if in_share_section:
+                        logger.debug(f"Processing line: {line.strip()}")
+                        stripped_line = line.strip()
+                        if not stripped_line:
+                            continue
+
+                        # Separator rows may not be indented depending on smbclient version.
+                        if set(stripped_line.replace(" ", "")) == {'-'}:
+                            logger.debug("Skipping separator line")
+                            continue
+
+                        if not (line.startswith(" ") or line.startswith("\t")):
+                            logger.debug(
+                                f"Line starts with character {line[0]} (ascii: {ord(line[0])})"
+                            )
+                            logger.debug("Reached end of share section")
+                            break
+
+                        logger.debug("Line starts with space or tab, indicating possible share entry")
                         # Clean up the line
                         line = line.strip()
-                        
+
                         # Extract share name (first column)
                         parts = line.split()
                         if not parts:
                             continue
-                            
+
                         share_name = parts[0]
-                        logging.debug(f"Share name found: {share_name}")
-                        
-                        # Skip separator lines (all dashes)
-                        if set(share_name) == {'-'}:
-                            logging.debug("Skipping separator line")
-                            continue
-                        
+                        logger.debug(f"Share name found: {share_name}")
+
                         # Skip IPC$ and admin shares
                         if share_name == "IPC$" or (share_name.endswith('$') and share_name != "IPC$"):
-                            logging.debug(f"Skipping administrative share: {share_name}")
+                            logger.debug(f"Skipping administrative share: {share_name}")
                             continue
-                            
+
                         # Get share type if available (second column)
                         share_type = parts[1] if len(parts) > 1 else ""
-                        
+
                         # Get comment if available (remaining columns)
                         share_comment = " ".join(parts[2:]) if len(parts) > 2 else ""
-                        
+
                         # Add the share to our list
                         shares.append({
                             'name': share_name,
@@ -572,19 +575,13 @@ def list_smb_shares(server: str, username: Optional[str] = None, password: Optio
                             'comment': share_comment
                         })
                         logger.debug(f"Found share: {share_name}")
-                    
-                    # If we've already been in the share section and hit a non-indented line, we're done
-                    elif in_share_section and not is_share_line:
-                        in_share_section = False
-                        logger.debug("Reached end of share section")
-                        break
-                        
+
                 if not shares:
                     # If no shares were found but the command succeeded, log more details to help debug
                     logger.debug("No shares found in output. Output was:")
                     for line in lines:
                         logger.debug(f"  {line}")
-                
+
                 # If connection succeeded and we were able to parse the output,
                 # exit the loop even if no shares were found
                 # This prevents falling back to lower SMB versions unnecessarily
@@ -605,19 +602,15 @@ def list_smb_shares(server: str, username: Optional[str] = None, password: Optio
                 logger.debug(f"Connection failed with {version}, return code {result.returncode}")
                 logger.debug(f"Error message: {result.stderr}")
                 # Continue to try the next version
-                
+
         except subprocess.TimeoutExpired:
             logger.error(f"Connection to {server} with {version} timed out")
         except subprocess.SubprocessError as e:
             logger.error(f"Error connecting to {server} with {version}: {e}")
         finally:
             # Make sure to clean up the credentials file in case of exceptions
-            if cred_file_path and os.path.exists(cred_file_path):
-                try:
-                    os.unlink(cred_file_path)
-                except Exception:
-                    pass
-    
+            _safe_unlink(cred_file_path)
+
     return shares, detected_version
 
 
@@ -625,13 +618,13 @@ def detect_smb_version(server: str, username: Optional[str] = None, password: Op
                    credentials_file: Optional[str] = None) -> str:
     """
     Detect the SMB version supported by the specified server.
-    
+
     Args:
         server: The server address (IP or hostname)
         username: Optional username for authentication
         password: Optional password for authentication
         credentials_file: Optional path to credentials file
-        
+
     Returns:
         String containing the detected SMB version or "Unknown"
     """
@@ -639,16 +632,16 @@ def detect_smb_version(server: str, username: Optional[str] = None, password: Op
     if not shutil.which('smbclient'):
         logger.error("smbclient command not found. Please install samba-client package.")
         return "Unknown"
-    
+
     # SMB versions to try in order of preference
     smb_versions_to_try = ["SMB3", "SMB2", "SMB1"]
-    
+
     for version in smb_versions_to_try:
         logger.debug(f"Testing {version} compatibility with {server}")
-        
+
         # Build the command
         cmd = ['smbclient', '-L', server]
-        
+
         # Add SMB version parameter
         if version == "SMB1":
             cmd.append('--option=client min protocol=NT1')
@@ -657,44 +650,20 @@ def detect_smb_version(server: str, username: Optional[str] = None, password: Op
             cmd.append('--option=client max protocol=SMB2')
         elif version == "SMB3":
             cmd.append('--option=client min protocol=SMB3')
-        
-        # Handle authentication
-        cred_file_path = None
-        if credentials_file:
-            # Use provided credentials file
-            if os.path.isfile(credentials_file):
-                cmd.extend(['--authentication-file', credentials_file])
-            else:
-                logger.error(f"Credentials file not found: {credentials_file}")
-                continue
-        elif username:
-            cmd.extend(['-U', username])
-            
-            # If password is provided, use a credentials file (safer than command line)
-            if password:
-                # Create a temporary credentials file
-                with NamedTemporaryFile(mode='w', delete=False) as cred_file:
-                    cred_file.write(f"username={username}\npassword={password}\n")
-                    cred_file_path = cred_file.name
-                
-                cmd.extend(['--authentication-file', cred_file_path])
-        else:
-            # No authentication provided, try guest/anonymous access
-            cmd.append('-N')
-        
+
+        cred_file_path, auth_error = _apply_auth_args(cmd, username, password, credentials_file)
+        if auth_error:
+            logger.error(auth_error)
+            continue
+
         logger.debug(f"Running command: {' '.join(cmd).replace(server, 'SERVER')} [auth details omitted]")
-        
+
         try:
             # Run the command
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            
-            # Clean up the temporary credentials file if it was created
-            if cred_file_path and os.path.exists(cred_file_path):
-                try:
-                    os.unlink(cred_file_path)
-                except Exception as e:
-                    logger.debug(f"Failed to remove temporary credentials file: {e}")
-            
+            _safe_unlink(cred_file_path)
+            cred_file_path = None
+
             # Check if the command was successful
             if result.returncode == 0:
                 logger.debug(f"Connection successful with {version}")
@@ -702,19 +671,15 @@ def detect_smb_version(server: str, username: Optional[str] = None, password: Op
             else:
                 logger.debug(f"Connection failed with {version}, return code {result.returncode}")
                 logger.debug(f"Error message: {result.stderr}")
-        
+
         except subprocess.TimeoutExpired:
             logger.error(f"Connection to {server} with {version} timed out")
         except subprocess.SubprocessError as e:
             logger.error(f"Error connecting to {server} with {version}: {e}")
         finally:
             # Make sure to clean up the credentials file in case of exceptions
-            if cred_file_path and os.path.exists(cred_file_path):
-                try:
-                    os.unlink(cred_file_path)
-                except Exception:
-                    pass
-    
+            _safe_unlink(cred_file_path)
+
     # If we get here, no version worked
     return "Unknown"
 
@@ -722,33 +687,33 @@ def detect_smb_version(server: str, username: Optional[str] = None, password: Op
 def main():
     """Main function to run when script is executed directly."""
     args = parse_arguments()
-    
+
     # Configure logging based on verbosity
     setup_logging(args.verbose, args.quiet)
-    
+
     # Check authentication parameters
     if args.password and not args.user:
         logger.error("Password provided without username (--password requires --user)")
         sys.exit(1)
-    
+
     if args.list_file_servers:
         servers = list_all_servers()
-        
+
         # Display only file servers with minimal information
         file_servers = [server for server in servers if server.get('is_file_server', False)]
-        
+
         if file_servers:
             for server in file_servers:
                 hostname = server['hostname'] if server['hostname'] else server.get('workgroup', '')
                 print(f"{server['ip']}\t{hostname}")
         # No else clause - don't print anything if no file servers found
-    
+
     elif args.check_connect:
         server = args.check_connect
-        
+
         # Try connection
         success, error_msg = check_smb_connection(server, args.user, args.password, args.credentials)
-        
+
         # Output result (to stdout for potential script integration)
         if success:
             print("Connection successful")
@@ -756,35 +721,35 @@ def main():
         else:
             print(f"Connection failed: {error_msg}" if error_msg else "Connection failed")
             sys.exit(1)
-    
+
     elif args.detect_version:
         server = args.detect_version
-        
+
         # Detect SMB version
         version = detect_smb_version(server, args.user, args.password, args.credentials)
-        
+
         # Print result
         print(f"SMB Version: {version}")
-        
+
         # Exit with success if version was detected, otherwise error
         if version != "Unknown":
             sys.exit(0)
         else:
             logger.error(f"Could not detect SMB version for {server}")
             sys.exit(1)
-    
+
     elif args.list_shares:
         server = args.list_shares
-        
+
         # List shares with specified or auto-detected SMB version
         shares, detected_version = list_smb_shares(
             server, args.user, args.password, args.credentials, args.smbversion)
-        
+
         if shares:
             # Print shares in the requested format (no longer printing SMB version)
             for share in shares:
                 share_name = share['name']
-                
+
                 if args.long:
                     # Detailed format with comment
                     share_comment = share.get('comment', '')
@@ -796,7 +761,7 @@ def main():
             # If no shares found or couldn't connect
             logger.warning(f"No accessible shares found on {server}")
             sys.exit(1)
-    
+
     # Additional commands will be handled here
 
 if __name__ == "__main__":

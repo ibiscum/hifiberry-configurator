@@ -11,29 +11,37 @@ class TestCmdlineTxtInitialization:
 
     def test_find_cmdline_file_in_firmware(self):
         """Test finding cmdline.txt in /boot/firmware."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            firmware_path = Path(tmpdir) / "firmware"
-            firmware_path.mkdir()
-            cmdline_file = firmware_path / "cmdline.txt"
-            cmdline_file.write_text("console=serial0,115200\n")
+        expected_path = "/boot/firmware/cmdline.txt"
 
-            with patch("configurator.cmdline.os.path.exists") as mock_exists:
-                def exists_side_effect(path):
-                    if path == str(cmdline_file):
-                        return True
-                    return False
+        with patch("configurator.cmdline.os.path.exists") as mock_exists:
+            mock_exists.side_effect = lambda p: p == expected_path
+            with patch("builtins.open", create=True) as mock_open:
+                mock_open.return_value.__enter__.return_value.read.return_value = "console=serial0,115200"
 
-                mock_exists.side_effect = exists_side_effect
+                cmdline = CmdlineTxt()
 
-                with patch("builtins.open", create=True) as mock_open:
-                    mock_open.return_value.__enter__.return_value.read.return_value = "console=serial0,115200"
+                assert cmdline.file_path == expected_path
 
-                    cmdline = CmdlineTxt.__new__(CmdlineTxt)
-                    cmdline.file_path = str(cmdline_file)
-                    cmdline.content = "console=serial0,115200"
-                    cmdline.original_content = "console=serial0,115200"
+    def test_find_cmdline_file_in_boot_fallback(self):
+        """Test falling back to /boot/cmdline.txt when firmware path is absent."""
+        firmware_path = "/boot/firmware/cmdline.txt"
+        boot_path = "/boot/cmdline.txt"
 
-                    assert cmdline.file_path == str(cmdline_file)
+        with patch("configurator.cmdline.os.path.exists") as mock_exists:
+            mock_exists.side_effect = lambda p: p == boot_path
+            with patch("builtins.open", create=True) as mock_open:
+                mock_open.return_value.__enter__.return_value.read.return_value = "root=/dev/mmcblk0p2"
+
+                cmdline = CmdlineTxt()
+
+                assert cmdline.file_path != firmware_path
+                assert cmdline.file_path == boot_path
+
+    def test_find_cmdline_file_not_found_raises(self):
+        """Test discovery failure when no cmdline file exists in expected locations."""
+        with patch("configurator.cmdline.os.path.exists", return_value=False):
+            with pytest.raises(FileNotFoundError):
+                CmdlineTxt()
 
     def test_init_reads_file_content(self):
         """Test that initialization reads file content."""
@@ -478,7 +486,55 @@ class TestMainFunction:
     def test_main_requires_argument(self):
         """Test main() requires a command-line argument."""
         with patch("sys.argv", ["cmdline"]):
-            from src.configurator.cmdline import main
+            from configurator.cmdline import main
 
             with pytest.raises(SystemExit):
                 main()
+
+    def test_main_runtime_error_exits_with_status_1(self):
+        """Test runtime failures in main() result in exit status 1."""
+        with patch("sys.argv", ["cmdline", "--enable-ipv6"]):
+            from configurator.cmdline import main
+
+            with patch("configurator.cmdline.CmdlineTxt", side_effect=RuntimeError("boom")):
+                with pytest.raises(SystemExit) as exc_info:
+                    main()
+
+        assert exc_info.value.code == 1
+
+
+class TestFailurePaths:
+    """Tests for explicit file operation failure paths."""
+
+    def test_save_raises_when_backup_fails(self):
+        """save() should propagate backup failures."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cmdline_file = Path(tmpdir) / "cmdline.txt"
+            cmdline_file.write_text("root=/dev/mmcblk0p2\n")
+
+            with patch.object(CmdlineTxt, "_find_cmdline_file", return_value=str(cmdline_file)):
+                cmdline = CmdlineTxt()
+                cmdline.enable_serial_console()
+                with patch("configurator.cmdline.shutil.copy", side_effect=OSError("copy failed")):
+                    with pytest.raises(OSError, match="copy failed"):
+                        cmdline.save()
+
+    def test_save_raises_when_write_fails(self):
+        """save() should propagate write failures after backup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cmdline_file = Path(tmpdir) / "cmdline.txt"
+            cmdline_file.write_text("root=/dev/mmcblk0p2\n")
+
+            with patch.object(CmdlineTxt, "_find_cmdline_file", return_value=str(cmdline_file)):
+                cmdline = CmdlineTxt()
+                cmdline.enable_serial_console()
+                real_open = open
+
+                def open_side_effect(path, mode="r", *args, **kwargs):
+                    if path == str(cmdline_file) and "w" in mode:
+                        raise OSError("write failed")
+                    return real_open(path, mode, *args, **kwargs)
+
+                with patch("builtins.open", side_effect=open_side_effect):
+                    with pytest.raises(OSError, match="write failed"):
+                        cmdline.save()

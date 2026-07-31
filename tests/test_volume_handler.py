@@ -145,6 +145,28 @@ class TestVolumeHandlerGetVolume(unittest.TestCase):
         self.assertEqual(result['data']['volume'], 100)
 
     @patch('configurator.handlers.volume_handler.get_headphone_volume')
+    def test_get_volume_decimal_string_parsed(self, mock_get_volume):
+        """String float values from backend should be parsed into integer volume."""
+        mock_get_volume.return_value = ('75.0', 'Headphone')
+
+        result, status = get_response(self.handler.handle_get_headphone_volume())
+
+        self.assertEqual(status, 200)
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['data']['volume'], 75)
+
+    @patch('configurator.handlers.volume_handler.get_headphone_volume')
+    def test_get_volume_invalid_backend_value(self, mock_get_volume):
+        """Invalid backend volume values should return a structured server error."""
+        mock_get_volume.return_value = ('invalid', 'Headphone')
+
+        result, status = get_response(self.handler.handle_get_headphone_volume())
+
+        self.assertEqual(status, 500)
+        self.assertEqual(result['status'], 'error')
+        self.assertEqual(result['error'], 'invalid_headphone_volume_value')
+
+    @patch('configurator.handlers.volume_handler.get_headphone_volume')
     def test_get_volume_not_available(self, mock_get_volume):
         """Test getting volume when no controls available"""
         mock_get_volume.return_value = (None, None)

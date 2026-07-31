@@ -48,10 +48,27 @@ Comprehensive documentation is available in the `docs/` directory:
 
 ## Testing
 
+For local development test runs (outside the Debian package build), install the
+minimal test dependencies in your venv first:
+
+```bash
+python -m pip install pytest flask
+```
+
 Run the test suite with:
 
 ```bash
 python3 -m pytest -q
+```
+
+## Debugging
+
+```bash
+# 1. Activate your virtual environment (Poetry example)
+poetry shell
+
+# 2. Run the module directly through Python's built-in debugger (pdb)
+python -m pdb -m my_package.cli --your-arguments
 ```
 
 Async tests are handled by a local pytest hook in `tests/conftest.py`, so `@pytest.mark.asyncio` tests run without requiring `pytest-asyncio`.

@@ -5,8 +5,10 @@ Provides endpoints for getting/setting Bluetooth settings, managing paired devic
 and handling passkey/modal requests for Bluetooth interactions.
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, Optional, Union, cast, TYPE_CHECKING
+from concurrent.futures import ThreadPoolExecutor
 
 from configurator.bluetooth import (
     get_bluetooth_settings,
@@ -53,6 +55,20 @@ except ImportError:
     request = StubRequest()  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+
+def _run_coroutine_sync(coro: Any) -> Any:
+    """Run a coroutine from a synchronous handler context."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    # If we are already inside an event loop, run the coroutine in a dedicated
+    # thread to avoid nested-loop runtime errors.
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(asyncio.run, coro)
+        return future.result()
 
 class BluetoothHandler:
     """Handler for bluetooth configuration API endpoints"""
@@ -225,7 +241,7 @@ class BluetoothHandler:
             Flask JSON response with list of paired devices
         """
         try:
-            devices: Any = get_paired_devices()  # type: ignore[arg-type]
+            devices: Any = _run_coroutine_sync(get_paired_devices())  # type: ignore[arg-type]
             return jsonify({  # type: ignore[return-value]
                 'status': 'success',
                 'data': devices
@@ -250,7 +266,7 @@ class BluetoothHandler:
         """
         try:
             address: Optional[str] = request.args.get("address")
-            result: Any = unpair_device(address)  # type: ignore[arg-type]
+            result: Any = _run_coroutine_sync(unpair_device(address))  # type: ignore[arg-type]
             return jsonify({  # type: ignore[return-value]
                 'status': 'success',
                 'data': result

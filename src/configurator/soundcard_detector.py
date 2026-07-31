@@ -6,6 +6,7 @@ import logging
 import argparse
 import time
 from xml.etree import ElementTree
+from typing import Optional
 try:
     import argcomplete
     ARGCOMPLETE_AVAILABLE = True
@@ -78,17 +79,30 @@ class SoundcardDetector:
         self.hifiberry_logger = logging.getLogger('hifiberry_events')
         self.hifiberry_logger.setLevel(logging.INFO)
 
-        # Create file handler
-        handler = logging.FileHandler(self.hifiberry_log_file)  # type: ignore[arg-type]
-        handler.setLevel(logging.INFO)
+        log_path = os.path.abspath(str(self.hifiberry_log_file))
 
-        # Create formatter with timestamp
-        formatter = logging.Formatter('%(asctime)s - %(message)s',
-                                    datefmt='%Y-%m-%d %H:%M:%S')
-        handler.setFormatter(formatter)
+        # Reuse the same file handler when already configured for this file,
+        # but close stale handlers from previous detector instances.
+        existing_match = False
+        for existing_handler in list(self.hifiberry_logger.handlers):
+            if isinstance(existing_handler, logging.FileHandler):
+                existing_path = os.path.abspath(getattr(existing_handler, "baseFilename", ""))
+                if existing_path == log_path:
+                    existing_match = True
+                    continue
+                self.hifiberry_logger.removeHandler(existing_handler)
+                existing_handler.close()
 
-        # Add handler to logger (avoid duplicates)
-        if not self.hifiberry_logger.handlers:
+        if not existing_match:
+            # Create file handler
+            handler = logging.FileHandler(log_path)
+            handler.setLevel(logging.INFO)
+
+            # Create formatter with timestamp
+            formatter = logging.Formatter('%(asctime)s - %(message)s',
+                                        datefmt='%Y-%m-%d %H:%M:%S')
+            handler.setFormatter(formatter)
+
             self.hifiberry_logger.addHandler(handler)
 
         # Prevent propagation to root logger to avoid duplicate messages
@@ -165,12 +179,34 @@ class SoundcardDetector:
 
     def _run_command(self, command):
         try:
-            result = subprocess.check_output(
-                command, shell=True, stderr=subprocess.DEVNULL, text=True
-            ).strip()
-            return result
-        except subprocess.CalledProcessError:
+            result = subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            output = (result.stdout or "").strip()
+            return output
+        except (subprocess.CalledProcessError, FileNotFoundError):
             return ""
+        except Exception as e:
+            logging.debug(f"Command execution failed for {command}: {e}")
+            return ""
+
+    def _find_hifiberry_card_from_aplay(self) -> Optional[str]:
+        """Return the first HiFiBerry `aplay -l` line that matches filters."""
+        output = self._run_command(["aplay", "-l"])
+        if not output:
+            return None
+
+        for line in output.splitlines():
+            line_lower = line.lower()
+            if "hifiberry" not in line_lower:
+                continue
+            if not self.include_pcm5102 and "pcm5102" in line_lower:
+                continue
+            return line.strip()
+        return None
 
     def _canonicalize_card_name(self):
         """If self.detected_card matches an `aliases` entry of any
@@ -431,10 +467,7 @@ class SoundcardDetector:
         if self.verbose:
             logging.info("Step 3: Attempting aplay detection...")
         # Conditionally filter out pcm5102 cards unless include_pcm5102 is True
-        if self.include_pcm5102:
-            found = self._run_command("aplay -l | grep hifiberry")
-        else:
-            found = self._run_command("aplay -l | grep hifiberry | grep -v pcm5102")
+        found = self._find_hifiberry_card_from_aplay()
         if found:
             logging.info(f"Found HiFiBerry card via aplay: {found}")
             detected_overlay = self._map_aplay_to_overlay(found)
@@ -727,8 +760,6 @@ class SoundcardDetector:
 
     def _probe_i2c(self):
         logging.info("Probing I2C for sound card...")
-        self.config.enable_i2c()
-        self.config.save()
 
         i2c_checks = [
             ("0x4a 25", "0x07", "dacplusadcpro", None),
@@ -743,7 +774,7 @@ class SoundcardDetector:
         ]
 
         for address, expected, overlay, card_name in i2c_checks:
-            result = self._run_command(f"i2cget -f -y 1 {address} 2>/dev/null")
+            result = self._run_command(["i2cget", "-f", "-y", "1", *address.split()])
             if self.verbose:
                 card_info = f" -> {overlay}" + (f" ({card_name})" if card_name else "")
                 if result == expected:

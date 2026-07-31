@@ -52,7 +52,7 @@ class ConfigFileManager:
         self.config = configparser.ConfigParser()
         self.config.read(self.config_file)
 
-        self.capability = self.config.get("Bluetooth", "capability", fallback="KeyboardDisplay")
+        self.capability = self.config.get("Bluetooth", "capability", fallback="NoInputNoOutput")
 
         self.discoverable = self.config.getboolean("Bluetooth", "discoverable", fallback="True")
         self.discoverable_timeout = self.config.getint("Bluetooth", "discoverable_timeout", fallback="0")
@@ -66,7 +66,7 @@ class ConfigFileManager:
         self.logger.info(f"Pairable: {self.pairable}")
         self.logger.info(f"Pairable timeout: {self.pairable_timeout}")
 
-    def set_config_value(self, section: str, key: str, value: str) -> None:
+    def set_config_value(self, section: str, key: str, value: str) -> bool:
         try:
             if not self.config.has_section(section):
                 self.config.add_section(section)
@@ -78,6 +78,7 @@ class ConfigFileManager:
                 self.config.write(configfile)
 
             self.logger.info(f"Set {section}.{key} = {value}")
+            return True
 
         except Exception as e:
             self.logger.error(f"Error setting config value: {e}")
@@ -86,6 +87,7 @@ class ConfigFileManager:
             self.logger.info(f"discoverable_timeout: {self.discoverable_timeout}")
             self.logger.info(f"pairable: {self.pairable}")
             self.logger.info(f"pairable_timeout: {self.pairable_timeout}")
+            return False
 
 # New functions based on the user's Flask routes
 
@@ -103,19 +105,24 @@ def get_bluetooth_settings() -> Dict[str, Any]:
 def set_bluetooth_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     """Sets bluetooth settings."""
     cfm = ConfigFileManager()
-    valid_keys = [
-        "capability",
-        "discoverable",
-        "discoverable_timeout",
-        "pairable",
-        "pairable_timeout",
-    ]
-    for key in valid_keys:
-        if key in settings:
-            value = settings.get(key)
-            if key in ["discoverable_timeout", "pairable_timeout"] and value == "":
+    key_aliases = {
+        "capability": "capability",
+        "discoverable": "discoverable",
+        "discoverable_timeout": "discoverable_timeout",
+        "discoverableTimeout": "discoverable_timeout",
+        "pairable": "pairable",
+        "pairable_timeout": "pairable_timeout",
+        "pairableTimeout": "pairable_timeout",
+    }
+    timeout_keys = {"discoverable_timeout", "pairable_timeout"}
+
+    for input_key, target_key in key_aliases.items():
+        if input_key in settings:
+            value = settings.get(input_key)
+            if target_key in timeout_keys and value == "":
                 value = "0"
-            cfm.set_config_value("Bluetooth", key, str(value))
+            if not cfm.set_config_value("Bluetooth", target_key, str(value)):
+                raise OSError(f"Failed to persist Bluetooth setting: {target_key}")
     return get_bluetooth_settings()
 
 
@@ -135,9 +142,13 @@ async def get_paired_devices() -> List[Dict[str, Any]]:
             if "org.bluez.Device1" in interfaces:  # type: ignore
                 device = interfaces["org.bluez.Device1"]  # type: ignore
                 if device.get("Paired", False):  # type: ignore
+                    address = device.get("Address")  # type: ignore
+                    if not address:
+                        logging.warning("Skipping paired Bluetooth device without Address at %s", path)
+                        continue
                     devices.append({
                         "name": str(device.get("Name", "Unknown")),  # type: ignore
-                        "address": str(device.get("Address")),  # type: ignore
+                        "address": str(address),
                         "connected": bool(device.get("Connected", False)),  # type: ignore
                         "trusted": bool(device.get("Trusted", False)),  # type: ignore
                     })

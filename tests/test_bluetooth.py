@@ -89,7 +89,7 @@ class TestConfigFileManager:
                 cfm = ConfigFileManager()
                 cfm.load_config_values()
 
-                assert cfm.capability == "KeyboardDisplay"
+                assert cfm.capability == "NoInputNoOutput"
                 assert cfm.discoverable is True
                 assert cfm.pairable is True
                 assert cfm.discoverable_timeout == 0
@@ -139,8 +139,8 @@ class TestConfigFileManager:
 
                 # Mock open to raise exception
                 with patch("builtins.open", side_effect=IOError("Permission denied")):
-                    cfm.set_config_value("Bluetooth", "key", "value")
-                    # Should not raise, just log error
+                    result = cfm.set_config_value("Bluetooth", "key", "value")
+                    assert result is False
 
 
 class TestGetBluetoothSettings:
@@ -246,6 +246,31 @@ class TestSetBluetoothSettings:
 
                 assert isinstance(result, dict)
                 assert result["capability"] == "Display"
+
+    def test_set_bluetooth_settings_accepts_camel_case_timeouts(self):
+        """Test camelCase timeout keys from API payloads are accepted."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "bluetooth.conf"
+
+            with patch("configurator.bluetooth.ConfigFileManager.config_path", config_path):
+                from configurator.bluetooth import set_bluetooth_settings, get_bluetooth_settings
+
+                set_bluetooth_settings({
+                    "discoverableTimeout": 33,
+                    "pairableTimeout": 44,
+                })
+                settings = get_bluetooth_settings()
+
+                assert settings["discoverableTimeout"] == 33
+                assert settings["pairableTimeout"] == 44
+
+    def test_set_bluetooth_settings_raises_on_write_failure(self):
+        """Test write failures are propagated instead of silently ignored."""
+        with patch("configurator.bluetooth.ConfigFileManager.set_config_value", return_value=False):
+            from configurator.bluetooth import set_bluetooth_settings
+
+            with pytest.raises(OSError, match="Failed to persist Bluetooth setting"):
+                set_bluetooth_settings({"capability": "Display"})
 
     def test_set_bluetooth_settings_ignores_invalid_keys(self):
         """Test that invalid keys are ignored."""
@@ -412,6 +437,56 @@ class TestGetPairedDevices:
 
             assert len(devices) == 1
             assert devices[0]["name"] == "PairedDevice"
+
+    @pytest.mark.asyncio
+    async def test_get_paired_devices_skips_missing_address(self):
+        """Paired devices missing Address should be skipped."""
+        mock_bus = MagicMock()
+        mock_om_interface = MagicMock()
+        mock_proxy_object = MagicMock()
+
+        mock_devices = {
+            "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF": {
+                "org.bluez.Device1": {
+                    "Name": "NoAddressDevice",
+                    "Paired": True,
+                }
+            },
+            "/org/bluez/hci0/dev_11_22_33_44_55_66": {
+                "org.bluez.Device1": {
+                    "Name": "ValidDevice",
+                    "Address": "11:22:33:44:55:66",
+                    "Paired": True,
+                    "Connected": False,
+                    "Trusted": False,
+                }
+            },
+        }
+
+        async def mock_get_managed_objects():
+            return mock_devices
+
+        async def mock_introspect(*args, **kwargs):
+            return "<node></node>"
+
+        async def mock_connect():
+            return mock_bus
+
+        mock_om_interface.call_GetManagedObjects = mock_get_managed_objects
+        mock_proxy_object.get_interface.return_value = mock_om_interface
+        mock_bus.get_proxy_object.return_value = mock_proxy_object
+        mock_bus.introspect = mock_introspect
+
+        mock_message_bus = MagicMock()
+        mock_message_bus.connect = mock_connect
+
+        with patch("configurator.bluetooth.MessageBus", return_value=mock_message_bus):
+            from configurator.bluetooth import get_paired_devices
+
+            devices = await get_paired_devices()
+
+            assert len(devices) == 1
+            assert devices[0]["address"] == "11:22:33:44:55:66"
 
     @pytest.mark.asyncio
     async def test_get_paired_devices_dbus_error(self):

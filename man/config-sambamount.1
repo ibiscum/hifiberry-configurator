@@ -9,6 +9,43 @@ config-sambamount \- Samba mount management tool
 manages Samba/CIFS mount points for network file system access on HiFiBerry systems.
 .SH OPTIONS
 .TP
+.B \-\-add-mount
+Add a mount configuration to the config database (requires
+.BR --server " and " --share )
+.TP
+.B \-\-remove-mount
+Remove a mount configuration from the config database (requires
+.BR --server " and " --share )
+.TP
+.B \-\-mount-all
+Mount all configured shares from the config database
+.TP
+.B \-\-mount
+Mount a specific configured share (requires
+.BR --server " and " --share )
+.TP
+.B \-\-unmount
+Unmount a specific configured share (requires
+.BR --server " and " --share )
+.TP
+.B \-\-list-mounts
+List all configured mounts with mount status
+.TP
+.B \-\-list-mounted-dirs
+List only currently mounted directories, one per line
+.TP
+.B \-\-server, \-\-share, \-\-user, \-\-password
+Connection and target parameters for mount operations
+.TP
+.B \-\-mountpoint
+Explicit mount target path (default: /data/server-share)
+.TP
+.B \-\-version
+SMB protocol version to use (SMB1, SMB2, SMB3)
+.TP
+.B \-\-mount-options
+Additional comma-separated CIFS mount options
+.TP
 .B \-v, \-\-verbose
 Enable verbose output for debugging
 .TP

@@ -17,6 +17,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 import sys
 import os
+import importlib
+import types
 
 # Mock the bless module and other dependencies before importing anything from src
 sys.modules['bless'] = MagicMock()
@@ -42,6 +44,36 @@ from configurator.ble_provisioning import (  # noqa: E402
     setup_logging,
     main,
 )
+
+
+def test_bless_symbol_fallback_on_missing_attributes():
+    """Missing bless symbols should trigger module fallback without crashing."""
+    import configurator.ble_provisioning as ble_provisioning
+
+    real_import_module = importlib.import_module
+
+    def _fake_import_module(name, package=None):
+        if name in {
+            "bless.backends.attribute",
+            "bless.backends.characteristic",
+            "bless.backends.bluezdbus.server",
+        }:
+            # Deliberately provide modules without expected attributes.
+            return types.SimpleNamespace()
+        return real_import_module(name, package)
+
+    with patch(
+        "configurator.ble_provisioning.importlib.import_module",
+        side_effect=_fake_import_module,
+    ):
+        reloaded = importlib.reload(ble_provisioning)
+
+    assert reloaded.GATTAttributePermissions is reloaded.Any
+    assert reloaded.GATTCharacteristicProperties is reloaded.Any
+    assert reloaded.BlessServer is reloaded.Any
+
+    # Restore regular module state for subsequent tests.
+    importlib.reload(ble_provisioning)
 
 
 class TestBLEProvisioningServer:
@@ -172,6 +204,30 @@ class TestBLEProvisioningServer:
         data = json.loads(status_bytes.decode("utf-8"))
         assert data["eth_connected"] is True
         assert data["eth_ip"] == "10.0.0.50"
+
+    @patch("configurator.ble_provisioning.network.get_network_config")
+    @patch("configurator.ble_provisioning.platform.node")
+    def test_get_network_status_ignores_unknown_interface_type(
+        self, mock_node, mock_get_config, server
+    ):
+        """Only explicit wired interfaces should set eth_* status fields."""
+        mock_node.return_value = "test-host"
+        mock_get_config.return_value = {
+            "hostname": "test-host",
+            "interfaces": [
+                {
+                    "name": "br0",
+                    "type": "bridge",
+                    "ipv4": "10.10.10.10",
+                }
+            ],
+        }
+
+        status_bytes = server._get_network_status()
+
+        data = json.loads(status_bytes.decode("utf-8"))
+        assert data["eth_connected"] is False
+        assert data["eth_ip"] == ""
 
     @patch("configurator.ble_provisioning.network.get_network_config")
     def test_get_network_status_error_handling(self, mock_get_config, server):
@@ -429,6 +485,18 @@ class TestMainCLI:
 
         mock_run.assert_called_once()
         mock_exit.assert_called_with(0)
+
+    @patch("configurator.ble_provisioning.subprocess.run")
+    @patch("sys.exit")
+    def test_main_stop_service_failure(self, mock_exit, mock_run):
+        """Test stop action when systemctl returns an error."""
+        mock_run.return_value = MagicMock(returncode=1, stderr="unit not found")
+
+        with patch("sys.argv", ["ble-provisioning", "--stop"]):
+            main()
+
+        mock_run.assert_called_once()
+        mock_exit.assert_called_with(1)
 
     @patch("sys.argv", ["ble-provisioning"])
     def test_main_no_action_required(self):

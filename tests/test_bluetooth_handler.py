@@ -7,7 +7,7 @@ modal handling, and device management operations.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 import sys
 from typing import Any, Tuple
 
@@ -296,7 +296,7 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         """Set up test fixtures"""
         self.handler = BluetoothHandler()
 
-    @patch('configurator.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
+    @patch('configurator.handlers.bluetooth_handler.get_paired_devices', new_callable=AsyncMock)
     def test_get_paired_devices(self, mock_get_devices):
         """Test getting paired devices"""
         # Mock returns a list-like object
@@ -310,9 +310,10 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         data = response.get_json()
 
         self.assertEqual(data['status'], 'success')
-        self.assertIsNotNone(data.get('data'))
+        self.assertEqual(data.get('data'), mock_devices)
+        mock_get_devices.assert_awaited_once()
 
-    @patch('configurator.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
+    @patch('configurator.handlers.bluetooth_handler.get_paired_devices', new_callable=AsyncMock)
     def test_get_paired_devices_empty(self, mock_get_devices):
         """Test getting paired devices when list is empty"""
         mock_get_devices.return_value = []
@@ -321,8 +322,10 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         data = response.get_json()
 
         self.assertEqual(data['status'], 'success')
+        self.assertEqual(data['data'], [])
+        mock_get_devices.assert_awaited_once()
 
-    @patch('configurator.handlers.bluetooth_handler.unpair_device', new_callable=Mock)
+    @patch('configurator.handlers.bluetooth_handler.unpair_device', new_callable=AsyncMock)
     @patch('configurator.handlers.bluetooth_handler.request')
     def test_unpair_device_success(self, mock_request, mock_unpair):
         """Test unpairing device successfully"""
@@ -334,7 +337,7 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
 
         self.assertEqual(status_code, 200)
         self.assertEqual(data['status'], 'success')
-        mock_unpair.assert_called_once_with("00:11:22:33:44:55")
+        mock_unpair.assert_awaited_once_with("00:11:22:33:44:55")
 
 
 class TestBluetoothHandlerDeviceRegression(unittest.TestCase):
@@ -349,7 +352,7 @@ class TestBluetoothHandlerDeviceRegression(unittest.TestCase):
         devices = [{'address': '00:11:22:33:44:55', 'name': 'Device 1'}]
         with patch(
             'configurator.handlers.bluetooth_handler.get_paired_devices',
-            new=Mock(return_value=devices),
+            new=AsyncMock(return_value=devices),
         ):
             response, status_code = unwrap_response(self.handler.handle_get_paired_devices())
         data = response.get_json()
@@ -362,7 +365,7 @@ class TestBluetoothHandlerDeviceRegression(unittest.TestCase):
         """Regression: runtime failures return 500 with an error payload."""
         with patch(
             'configurator.handlers.bluetooth_handler.get_paired_devices',
-            new=Mock(side_effect=RuntimeError('Bluetooth error')),
+            new=AsyncMock(side_effect=RuntimeError('Bluetooth error')),
         ):
             response, status_code = unwrap_response(self.handler.handle_get_paired_devices())
         data = response.get_json()
@@ -380,7 +383,7 @@ class TestBluetoothHandlerDeviceRegression(unittest.TestCase):
 
         with patch(
             'configurator.handlers.bluetooth_handler.unpair_device',
-            new=Mock(side_effect=ValueError('Device not found')),
+            new=AsyncMock(side_effect=ValueError('Device not found')),
         ):
             response, status_code = unwrap_response(self.handler.handle_unpair_device())
         data = response.get_json()
@@ -396,7 +399,7 @@ class TestBluetoothHandlerDeviceRegression(unittest.TestCase):
 
         with patch(
             'configurator.handlers.bluetooth_handler.unpair_device',
-            new=Mock(side_effect=RuntimeError('Unpair failed')),
+            new=AsyncMock(side_effect=RuntimeError('Unpair failed')),
         ):
             response, status_code = unwrap_response(self.handler.handle_unpair_device())
         data = response.get_json()

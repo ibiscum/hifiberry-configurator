@@ -27,7 +27,6 @@ def setup_logging(verbose: bool = False) -> None:
         stream=sys.stderr
     )
 
-
 def _filter_server_interface_rules(lines: list[str]) -> tuple[list[str], bool, bool, bool]:
     """Remove existing interface rules from the [server] section."""
     modified = False
@@ -62,7 +61,6 @@ def _filter_server_interface_rules(lines: list[str]) -> tuple[list[str], bool, b
         new_lines.append(line)
 
     return new_lines, modified, found_allow_interfaces, in_server_section
-
 
 def _ensure_allow_interfaces(lines: list[str]) -> tuple[list[str], bool]:
     """Ensure allow-interfaces is present in [server] section."""

@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the execution flow of [src/hattools.py](src/hattools.py), exposed by the `config-hattools` CLI command and reusable `get_hat_info()` helper.
+This document describes the execution flow of [src/configurator/hattools.py](src/configurator/hattools.py), exposed by the `config-hattools` CLI command and reusable `get_hat_info()` helper.
 
 ## Entry Point
 
@@ -43,7 +43,7 @@ flowchart TD
 
 ### get_hat_info
 
-Function: [src/hattools.py](src/hattools.py)
+Function: [src/configurator/hattools.py](src/configurator/hattools.py)
 
 1. If `HatEEPROM` import is unavailable, returns `{"vendor": None, "product": None, "uuid": None}`.
 2. Otherwise creates `HatEEPROM()` and calls `short_info(debug=False)`.
@@ -58,7 +58,7 @@ Verbose behavior:
 
 ### main
 
-Function: [src/hattools.py](src/hattools.py)
+Function: [src/configurator/hattools.py](src/configurator/hattools.py)
 
 1. Parses flags:
    - `-a/--all`: include UUID in output
@@ -89,9 +89,9 @@ Even on read failures, output remains deterministic because defaults are applied
 
 Primary in-repo consumers of `get_hat_info()`:
 
-- [src/systeminfo.py](src/systeminfo.py)
-- [src/soundcard.py](src/soundcard.py)
-- [src/soundcard_detector.py](src/soundcard_detector.py)
+- [src/configurator/systeminfo.py](src/configurator/systeminfo.py)
+- [src/configurator/soundcard.py](src/configurator/soundcard.py)
+- [src/configurator/soundcard_detector.py](src/configurator/soundcard_detector.py)
 
 These modules use HAT vendor/product/UUID as inputs for system-reporting and card-detection heuristics.
 

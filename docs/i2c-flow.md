@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the execution flow of [src/i2c.py](src/i2c.py), which provides I2C bus discovery helpers used by the API handler layer.
+This document describes the execution flow of [src/configurator/i2c.py](src/configurator/i2c.py), which provides I2C bus discovery helpers used by the API handler layer.
 
 ## Entry Points
 
@@ -13,8 +13,8 @@ Primary public functions:
 
 Primary API integration:
 
-- Route `/api/v1/i2c/devices` in [src/server.py](src/server.py)
-- Handler [src/handlers/i2c_handler.py](src/handlers/i2c_handler.py) calls `get_i2c_info()`
+- Route `/api/v1/i2c/devices` in [src/configurator/server.py](src/configurator/server.py)
+- Handler [src/configurator/handlers/i2c_handler.py](src/configurator/handlers/i2c_handler.py) calls `get_i2c_info()`
 
 Handler response semantics:
 
@@ -45,7 +45,7 @@ flowchart TD
 
 ### get_i2c_info
 
-Function: [src/i2c.py](src/i2c.py)
+Function: [src/configurator/i2c.py](src/configurator/i2c.py)
 
 1. Computes bus path `/dev/i2c-<bus_number>`.
 2. Returns early with error if bus device path does not exist.
@@ -60,7 +60,7 @@ Function: [src/i2c.py](src/i2c.py)
 
 ### scan_i2c_bus
 
-Function: [src/i2c.py](src/i2c.py)
+Function: [src/configurator/i2c.py](src/configurator/i2c.py)
 
 1. Opens `smbus2.SMBus(bus_number)`.
 2. Probes address range `0x03` to `0x77` via `read_byte`:

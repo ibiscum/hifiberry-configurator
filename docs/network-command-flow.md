@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the execution flow of [src/network.py](src/network.py), including both:
+This document describes the execution flow of [src/configurator/network.py](src/configurator/network.py), including both:
 
 - CLI command entrypoint `config-network`
 - API-backed read path `/api/v1/network`
@@ -15,12 +15,12 @@ CLI entrypoint:
 
 API entrypoint:
 
-- Route `/api/v1/network` in [src/server.py](src/server.py)
-- Handler [src/handlers/network_handler.py](src/handlers/network_handler.py) calls `get_network_config()`
+- Route `/api/v1/network` in [src/configurator/server.py](src/configurator/server.py)
+- Handler [src/configurator/handlers/network_handler.py](src/configurator/handlers/network_handler.py) calls `get_network_config()`
 
 Additional in-repo consumer:
 
-- [src/ble_provisioning.py](src/ble_provisioning.py) calls `network.get_network_config()` to check runtime network state.
+- [src/configurator/ble_provisioning.py](src/configurator/ble_provisioning.py) calls `network.get_network_config()` to check runtime network state.
 
 ## High-Level Flow
 
@@ -42,7 +42,7 @@ flowchart TD
 
 ## CLI Flow
 
-Function: [src/network.py](src/network.py) `main()`
+Function: [src/configurator/network.py](src/configurator/network.py) `main()`
 
 1. Parses one required command from a mutually exclusive group:
    - `--list-interfaces`
@@ -62,7 +62,7 @@ Display options:
 
 ## Interface Discovery Flow
 
-Functions: [src/network.py](src/network.py)
+Functions: [src/configurator/network.py](src/configurator/network.py)
 
 - `is_physical_interface(interface)`
 - `list_physical_interfaces()`
@@ -80,7 +80,7 @@ Behavior summary:
 
 ## NetworkManager Mutation Flows
 
-Functions: [src/network.py](src/network.py)
+Functions: [src/configurator/network.py](src/configurator/network.py)
 
 - `configure_dhcp(interface)`
 - `configure_fixed_ip(interface, ip_with_mask, router)`
@@ -100,14 +100,14 @@ Static-IP specific validation:
 
 ## IPv6 System-Wide Flows
 
-Functions: [src/network.py](src/network.py)
+Functions: [src/configurator/network.py](src/configurator/network.py)
 
 - `enable_ipv6()`
 - `disable_ipv6()`
 
 Enable flow:
 
-1. Updates kernel cmdline via [src/cmdline.py](src/cmdline.py) `CmdlineTxt.enable_ipv6()`.
+1. Updates kernel cmdline via [src/configurator/cmdline.py](src/configurator/cmdline.py) `CmdlineTxt.enable_ipv6()`.
 2. Removes disable sysctl file (`/etc/sysctl.d/99-disable-ipv6.conf`) when present.
 3. Creates enable sysctl file (`/etc/sysctl.d/99-enable-ipv6.conf`).
 4. Applies sysctl (`sysctl -p <file>`).
@@ -130,7 +130,7 @@ Notes:
 
 ## API Read Flow
 
-Handler: [src/handlers/network_handler.py](src/handlers/network_handler.py)
+Handler: [src/configurator/handlers/network_handler.py](src/configurator/handlers/network_handler.py)
 
 1. `handle_get_network_config()` calls `get_network_config()`.
 2. `get_network_config()` collects:
@@ -154,7 +154,7 @@ Mutation operations:
 - modifies NetworkManager connection profiles (`nmcli connection modify/add/up`)
 - writes/removes sysctl files under `/etc/sysctl.d/`
 - applies sysctl settings (`sysctl -p`)
-- updates kernel cmdline through [src/cmdline.py](src/cmdline.py)
+- updates kernel cmdline through [src/configurator/cmdline.py](src/configurator/cmdline.py)
 - restarts `NetworkManager`
 
 ## Operational Notes

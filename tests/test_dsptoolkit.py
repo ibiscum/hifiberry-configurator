@@ -115,6 +115,17 @@ class TestDSPDetection(unittest.TestCase):
         self.assertEqual(result, {"status": "error"})
 
     @patch('configurator.dsptoolkit.requests.get')
+    def test_detect_dsp_valueerror_json_decode(self, mock_get):
+        """Test DSP detection with non-JSONDecodeError parse failure."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.side_effect = ValueError("Malformed JSON")
+        mock_get.return_value = mock_response
+
+        result = self.toolkit.detect_dsp()
+        self.assertEqual(result, {"status": "error"})
+
+    @patch('configurator.dsptoolkit.requests.get')
     def test_detect_dsp_http_error(self, mock_get):
         """Test DSP detection with HTTP error status"""
         mock_response = MagicMock()
@@ -441,6 +452,17 @@ class TestMainCommandLine(unittest.TestCase):
             self.assertEqual(result, 1)
             self.assertIn("unavailable", fake_out.getvalue())
 
+    @patch('configurator.dsptoolkit.DSPToolkit.detect_dsp')
+    @patch('sys.argv', ['dsptoolkit'])
+    def test_main_default_output_unknown_status_normalized(self, mock_detect):
+        """Test default output normalizes unknown statuses to error."""
+        mock_detect.return_value = {"status": "custom_status"}
+
+        with patch('sys.stdout', new=StringIO()) as fake_out:
+            result = main()
+            self.assertEqual(result, 1)
+            self.assertEqual(fake_out.getvalue().strip(), "DSP status: error")
+
     @patch('configurator.dsptoolkit.DSPToolkit')
     @patch('sys.argv', ['dsptoolkit', '--host', '10.0.0.1', '--port', '8080', '--timeout', '20.0'])
     def test_main_custom_parameters(self, mock_toolkit_class):
@@ -528,16 +550,21 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         self.assertEqual(DEFAULT_TIMEOUT, 5.0)
         self.assertEqual(VALID_DSP_STATUSES, {"detected", "not_detected", "error", "unavailable"})
 
-    @patch.object(DSPToolkit, 'detect_dsp')
-    def test_multiple_sequential_detections(self, mock_detect):
-        """Test multiple sequential DSP detection calls"""
-        mock_detect.return_value = {"status": "detected"}
+    @patch('configurator.dsptoolkit.requests.get')
+    def test_multiple_sequential_detections(self, mock_get):
+        """Test repeated detect_dsp calls are not cached and stay consistent."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"status": "detected", "detected_dsp": "ADAU14xx"}
+        mock_get.return_value = mock_response
 
         for _ in range(5):
             result = self.toolkit.detect_dsp()
-            self.assertIsNotNone(result)
+            if result is None:
+                self.fail("Expected DSP response object")
+            self.assertEqual(result.get("status"), "detected")
 
-        self.assertEqual(mock_detect.call_count, 5)
+        self.assertEqual(mock_get.call_count, 5)
 
 
 if __name__ == '__main__':

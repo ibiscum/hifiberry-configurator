@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/env bash
 
 # detectsoundcard tool
 # Automatically configures the system with default settings and detects the sound card

@@ -24,7 +24,7 @@ from unittest.mock import patch
 # sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Now import ConfigTxt from the src package
-from configurator.configtxt import ConfigTxt  # noqa: E402
+from configurator.configtxt import ConfigTxt, HIFIBERRY_DETECTION_DISABLED  # noqa: E402
 from configurator import configtxt as configtxt_module  # noqa: E402
 
 
@@ -324,6 +324,23 @@ class TestOverlayManagement(unittest.TestCase):
         eeprom_lines = [line for line in config.lines if 'force_eeprom_read=0' in line]
         self.assertTrue(len(eeprom_lines) > 0)
 
+    def test_enable_overlay_idempotent_with_metadata(self):
+        """Test repeated overlay enable keeps a single overlay and metadata set."""
+        with open(self.config_path, 'w') as f:
+            f.write("# Test config\n")
+
+        config = ConfigTxt(self.config_path)
+        config.enable_overlay("hifiberry-dac", card_name="HiFiBerry DAC", disable_eeprom=True)
+        config.enable_overlay("hifiberry-dac", card_name="HiFiBerry DAC", disable_eeprom=True)
+
+        overlay_lines = [line for line in config.lines if line.strip() == 'dtoverlay=hifiberry-dac']
+        card_comment_lines = [line for line in config.lines if line.strip() == '# HiFiBerry card: HiFiBerry DAC']
+        eeprom_lines = [line for line in config.lines if line.strip() == 'force_eeprom_read=0']
+
+        self.assertEqual(len(overlay_lines), 1)
+        self.assertEqual(len(card_comment_lines), 1)
+        self.assertEqual(len(eeprom_lines), 1)
+
     def test_remove_hifiberry_overlays(self):
         """Test removing all HiFiBerry overlays"""
         config = ConfigTxt(self.config_path)
@@ -340,6 +357,16 @@ class TestOverlayManagement(unittest.TestCase):
         # Verify force_eeprom_read is removed
         eeprom_lines = [line for line in config.lines if 'force_eeprom_read=' in line]
         self.assertEqual(len(eeprom_lines), 0)
+
+    def test_remove_hifiberry_overlays_removes_detection_disabled_marker(self):
+        """Test removing HiFiBerry entries also removes detection-disabled marker."""
+        with open(self.config_path, 'a') as f:
+            f.write(f"{HIFIBERRY_DETECTION_DISABLED}\n")
+
+        config = ConfigTxt(self.config_path)
+        config.remove_hifiberry_overlays()
+
+        self.assertNotIn(HIFIBERRY_DETECTION_DISABLED, [line.strip() for line in config.lines])
 
     def test_enable_hat_i2c(self):
         """Test enabling HAT I2C overlay"""
@@ -569,7 +596,7 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         self.assertTrue(any('noaudio' in line for line in hdmi_lines))
 
     def test_multiple_occurrences_of_same_setting(self):
-        """Test handling of duplicate settings (last one wins)"""
+        """Test handling of duplicate settings by collapsing to one canonical line."""
         with open(self.config_path, 'w') as f:
             f.write("dtparam=audio=on\n")
             f.write("dtparam=audio=off\n")
@@ -577,8 +604,8 @@ class TestEdgeCasesAndRobustness(unittest.TestCase):
         config = ConfigTxt(self.config_path)
         config.enable_onboard_sound()
 
-        # Should update the first occurrence
-        self.assertEqual(config.lines[0].strip(), "dtparam=audio=on")
+        audio_lines = [line.strip() for line in config.lines if line.strip().startswith("dtparam=audio=")]
+        self.assertEqual(audio_lines, ["dtparam=audio=on"])
 
     def test_very_long_config_file(self):
         """Test handling of a very large config file"""

@@ -28,12 +28,12 @@ def get_hostnames() -> Tuple[Optional[str], Optional[str]]:
     try:
         # Get hostname
         result = subprocess.run(['hostnamectl', 'hostname'],
-                              capture_output=True, text=True, timeout=5)
+                              capture_output=True, text=True, timeout=5, check=False)
         hostname = result.stdout.strip() if result.returncode == 0 else None
 
         # Get pretty hostname
         result = subprocess.run(['hostnamectl', '--pretty'],
-                              capture_output=True, text=True, timeout=5)
+                              capture_output=True, text=True, timeout=5, check=False)
         pretty_hostname = result.stdout.strip() if result.returncode == 0 else None
 
         # If pretty hostname is empty, it's not set
@@ -88,6 +88,10 @@ def validate_pretty_hostname(pretty_hostname: str) -> bool:
     if not pretty_hostname:
         return False
 
+    # Reject whitespace-only names early.
+    if not pretty_hostname.strip():
+        return False
+
     # Must be printable ASCII characters and reasonable length
     if len(pretty_hostname) > 64:
         return False
@@ -128,7 +132,7 @@ def set_pretty_hostname(pretty_hostname: str) -> bool:
     """
     try:
         result = subprocess.run(['hostnamectl', 'set-hostname', '--pretty', pretty_hostname],
-                              capture_output=True, text=True, timeout=10)
+                              capture_output=True, text=True, timeout=10, check=False)
 
         if result.returncode == 0:
             logger.info(f"Successfully set pretty hostname to: {pretty_hostname}")

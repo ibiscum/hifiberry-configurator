@@ -16,7 +16,7 @@ It is intended as an architecture map for debugging and onboarding.
 ### Service startup
 
 - `config-server` starts the Flask/Waitress API service (entrypoint in pyproject scripts).
-- `ConfigAPIServer` in src/server.py creates all handlers during initialization.
+- `ConfigAPIServer` in src/configurator/server.py creates all handlers during initialization.
 
 ### CLI commands
 
@@ -29,7 +29,7 @@ Console scripts are registered in pyproject scripts and map to module `main()` f
 
 ## Core Routing Flow
 
-In src/server.py, `_register_routes()` maps each endpoint to a handler method. The server itself mostly does routing and uniform JSON error responses; command side effects happen in handlers and backend modules.
+In src/configurator/server.py, `_register_routes()` maps each endpoint to a handler method. The server itself mostly does routing and uniform JSON error responses; command side effects happen in handlers and backend modules.
 
 ```mermaid
 flowchart LR
@@ -45,13 +45,13 @@ flowchart LR
 
 | Endpoint/Command Group | Route/Entry File | Primary Handler/Backend Files |
 | --- | --- | --- |
-| API route registration | src/server.py | src/handlers/__init__.py |
-| systemd endpoints | src/server.py | src/handlers/systemd_handler.py, src/systemd_service.py |
-| script execution endpoints | src/server.py | src/handlers/script_handler.py |
-| reboot/shutdown endpoints | src/server.py | src/handlers/system_handler.py |
-| SMB endpoints | src/server.py | src/handlers/smb_handler.py, src/sambaclient.py, src/sambamount.py |
-| Bluetooth endpoints | src/server.py | src/handlers/bluetooth_handler.py, src/bluetooth.py |
-| BLE provisioning endpoints | src/server.py | src/handlers/ble_handler.py |
+| API route registration | src/configurator/server.py | src/configurator/handlers/__init__.py |
+| systemd endpoints | src/configurator/server.py | src/configurator/handlers/systemd_handler.py, src/configurator/systemd_service.py |
+| script execution endpoints | src/configurator/server.py | src/configurator/handlers/script_handler.py |
+| reboot/shutdown endpoints | src/configurator/server.py | src/configurator/handlers/system_handler.py |
+| SMB endpoints | src/configurator/server.py | src/configurator/handlers/smb_handler.py, src/configurator/sambaclient.py, src/configurator/sambamount.py |
+| Bluetooth endpoints | src/configurator/server.py | src/configurator/handlers/bluetooth_handler.py, src/configurator/bluetooth.py |
+| BLE provisioning endpoints | src/configurator/server.py | src/configurator/handlers/ble_handler.py |
 | BLE runtime service | systemd/ble-provisioning.service | src/ble_provisioning.py, pyproject scripts |
 | ALSA/asound command | pyproject scripts (`config-asoundconf`) | src/asoundconf.py |
 | HAT EEPROM info command | pyproject scripts (`config-hattools`) | src/hattools.py, src/systeminfo.py |
@@ -77,7 +77,7 @@ Route family:
 Execution path:
 
 - server.py -> `SystemdHandler`
-- `SystemdHandler` delegates to `SystemdServiceManager` in src/systemd_service.py
+- `SystemdHandler` delegates to `SystemdServiceManager` in src/configurator/systemd_service.py
 - `SystemdServiceManager` executes `systemctl` commands (system or user context)
 
 Notes:
@@ -185,7 +185,7 @@ Execution path:
 
 Notes:
 
-- This flow is currently CLI-only; there is no direct `/api/v1/*` route mapped to src/asoundconf.py in src/server.py.
+- This flow is currently CLI-only; there is no direct `/api/v1/*` route mapped to src/configurator/asoundconf.py in src/configurator/server.py.
 - Primary side effect is writing `/etc/asound.conf` when generated content differs from the existing file.
 
 ### 7. cmdline kernel parameter CLI flow
@@ -214,7 +214,7 @@ Execution path:
 
 Notes:
 
-- This flow is CLI-only; there is no direct `/api/v1/*` route mapped to src/cmdline.py in src/server.py.
+- This flow is CLI-only; there is no direct `/api/v1/*` route mapped to src/configurator/cmdline.py in src/configurator/server.py.
 - Side effects are file edits under `/boot*`; no subprocess/systemctl calls are used.
 
 ### 8. config.txt CLI flow
@@ -239,7 +239,7 @@ Execution path:
 
 Notes:
 
-- This flow is CLI-only; there is no direct `/api/v1/*` route mapped to src/configtxt.py in src/server.py.
+- This flow is CLI-only; there is no direct `/api/v1/*` route mapped to src/configurator/configtxt.py in src/configurator/server.py.
 - Side effects are file edits under `/boot/firmware`; no subprocess/systemctl/DBus calls are used in this module.
 
 ### 9. DSP toolkit flow
@@ -266,7 +266,7 @@ Integration note:
 
 Notes:
 
-- This module has no direct `/api/v1/*` route in `src/server.py`.
+- This module has no direct `/api/v1/*` route in `src/configurator/server.py`.
 - Side effects are HTTP reads only; no local file writes or subprocess calls.
 
 ### 10. HAT EEPROM info flow
@@ -294,7 +294,7 @@ Integration note:
 
 Notes:
 
-- This module has no direct `/api/v1/*` route in `src/server.py`.
+- This module has no direct `/api/v1/*` route in `src/configurator/server.py`.
 - Side effects are EEPROM reads only; no subprocess/systemctl/DBus calls.
 
 ### 11. Hostname backend flow
@@ -415,7 +415,8 @@ Execution path:
 
 Important behavior note:
 
-- In the current code, `get_paired_devices()` and `unpair_device()` are async in src/bluetooth.py, while `BluetoothHandler` calls them synchronously. This should be reviewed if runtime behavior is inconsistent.
+- `get_paired_devices()` and `unpair_device()` are async in src/bluetooth.py.
+- `BluetoothHandler` executes these through a synchronous coroutine bridge, so route handlers return realized JSON payloads rather than coroutine objects.
 
 ## Configuration DB Flow
 

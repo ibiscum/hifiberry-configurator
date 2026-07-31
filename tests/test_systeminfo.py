@@ -236,6 +236,25 @@ class TestGetSoundcardInfo(unittest.TestCase):
         self.assertIsNone(result['volume_control'])
         self.assertIsNone(result['hardware_index'])
         self.assertEqual(result['output_channels'], 0)
+        self.assertIn('pinSource', result)
+        self.assertIsNone(result['pinSource'])
+
+
+class TestSoundcardPinHelpers(unittest.TestCase):
+    """Tests for config-based soundcard pin helper methods."""
+
+    @patch('configurator.systeminfo.open', side_effect=FileNotFoundError)
+    def test_is_soundcard_fixed_in_config_txt_missing_file(self, _mock_open):
+        """Missing config file should be treated as no fixed pin."""
+        info = SystemInfo()
+        self.assertFalse(info._is_soundcard_fixed_in_config_txt())
+
+    @patch('configurator.systeminfo.open', new_callable=mock_open, read_data="# HiFiBerry sound detection disabled\n")
+    @patch('configurator.configtxt.HIFIBERRY_DETECTION_DISABLED', "# HiFiBerry sound detection disabled")
+    def test_is_soundcard_fixed_in_config_txt_detects_comment(self, _mock_open):
+        """Detection-disabled marker comment should be recognized."""
+        info = SystemInfo()
+        self.assertTrue(info._is_soundcard_fixed_in_config_txt())
 
 
 class TestGetSystemInfoDict(unittest.TestCase):
@@ -276,6 +295,9 @@ class TestGetSystemInfoDict(unittest.TestCase):
 
         self.assertEqual(result['status'], 'error')
         self.assertIn('error', result)
+        self.assertIn('headphone_volume_control', result['soundcard'])
+        self.assertIn('fixedInConfigTxt', result['soundcard'])
+        self.assertIn('pinSource', result['soundcard'])
 
 
 class TestGetFlatInfoDict(unittest.TestCase):

@@ -172,6 +172,35 @@ class TestLoadConfig:
         finally:
             os.unlink(temp_path)
 
+    def test_load_config_non_dict_top_level(self):
+        """Test loading config when top-level JSON is not an object."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(["not", "an", "object"], f)
+            temp_path = f.name
+
+        try:
+            parser = ConfigParser(config_file=temp_path)
+            result = parser.load_config()
+            assert result == {}
+        finally:
+            os.unlink(temp_path)
+
+    def test_load_config_non_dict_with_drop_ins_does_not_crash(self):
+        """Non-object main config should fail safely even if drop-ins exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = os.path.join(tmpdir, "config.json")
+            with open(config_path, 'w') as f:
+                json.dump(["bad-main"], f)
+
+            conf_d_dir = os.path.join(tmpdir, "conf.d")
+            os.makedirs(conf_d_dir)
+            with open(os.path.join(conf_d_dir, "01-extra.json"), 'w') as f:
+                json.dump({"section": {"key": "value"}}, f)
+
+            parser = ConfigParser(config_file=config_path)
+            result = parser.load_config()
+            assert result == {}
+
     def test_load_config_caches_result(self):
         """Test that load_config caches the result internally"""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
@@ -407,6 +436,19 @@ class TestGetSection:
             default = {"default_key": "default_value"}
             result = parser.get_section("nonexistent", default)
             assert result == default
+        finally:
+            os.unlink(temp_path)
+
+    def test_get_section_non_dict_main_config_returns_default(self):
+        """Section reads should remain safe when main config top-level is invalid."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump([1, 2, 3], f)
+            temp_path = f.name
+
+        try:
+            parser = ConfigParser(config_file=temp_path)
+            result = parser.get_section("section", {"fallback": True})
+            assert result == {"fallback": True}
         finally:
             os.unlink(temp_path)
 

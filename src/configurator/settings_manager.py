@@ -7,10 +7,13 @@ across system restarts or configuration changes.
 """
 
 import logging
-from typing import Dict, Callable
+from typing import Any, Callable, Dict
 from configurator.configdb import ConfigDB
 
 logger = logging.getLogger(__name__)
+
+SaveCallback = Callable[[], Any]
+RestoreCallback = Callable[[str], None]
 
 class SettingsManager:
     """
@@ -28,23 +31,37 @@ class SettingsManager:
             configdb: ConfigDB instance to use for storage
         """
         self.configdb = configdb
-        self._registered_settings: Dict[str, Dict[str, Callable]] = {}
+        self._registered_settings: Dict[str, Dict[str, Callable[..., Any]]] = {}
         self.setting_prefix = "saved-setting."
 
-    def register_setting(self, setting_name: str, save_callback: Callable, restore_callback: Callable):
+    def register_setting(
+        self,
+        setting_name: str,
+        save_callback: SaveCallback,
+        restore_callback: RestoreCallback,
+    ) -> None:
         """
         Register a setting with save and restore callbacks
 
         Args:
             setting_name: Name of the setting (will be prefixed with 'saved-setting.')
             save_callback: Function that returns the current setting value
-            restore_callback: Function that takes a value and applies it
+            restore_callback: Function that takes a stored string value and applies it
         """
+        if setting_name in self._registered_settings:
+            logger.warning(f"Replacing existing registration for setting: {setting_name}")
         self._registered_settings[setting_name] = {
             'save': save_callback,
             'restore': restore_callback
         }
         logger.info(f"Registered setting: {setting_name}")
+
+    @staticmethod
+    def _serialize_setting_value(value: Any) -> str:
+        """Serialize callback output for ConfigDB storage."""
+        if isinstance(value, str):
+            return value
+        return str(value)
 
     def save_setting(self, setting_name: str) -> bool:
         """
@@ -66,7 +83,7 @@ class SettingsManager:
 
             if value is not None:
                 key = f"{self.setting_prefix}{setting_name}"
-                self.configdb.set(key, str(value))
+                self.configdb.set(key, self._serialize_setting_value(value))
                 logger.info(f"Saved setting '{setting_name}' with value: {value}")
                 return True
             else:
@@ -75,6 +92,7 @@ class SettingsManager:
 
         except Exception as e:
             logger.error(f"Error saving setting '{setting_name}': {e}")
+            logger.debug("save_setting exception details", exc_info=True)
             return False
 
     def restore_setting(self, setting_name: str) -> bool:
@@ -97,7 +115,7 @@ class SettingsManager:
 
             if value is not None:
                 restore_callback = self._registered_settings[setting_name]['restore']
-                restore_callback(value)
+                restore_callback(str(value))
                 logger.info(f"Restored setting '{setting_name}' with value: {value}")
                 return True
             else:
@@ -106,6 +124,7 @@ class SettingsManager:
 
         except Exception as e:
             logger.error(f"Error restoring setting '{setting_name}': {e}")
+            logger.debug("restore_setting exception details", exc_info=True)
             return False
 
     def save_all_settings(self) -> Dict[str, bool]:
@@ -142,7 +161,7 @@ class SettingsManager:
 
         return results
 
-    def list_registered_settings(self) -> list:
+    def list_registered_settings(self) -> list[str]:
         """
         Get list of registered setting names
 
@@ -159,12 +178,19 @@ class SettingsManager:
             Dictionary mapping setting names to their saved values
         """
         all_keys = self.configdb.get_all(prefix=self.setting_prefix)
-        saved_settings = {}
+        saved_settings: Dict[str, str] = {}
 
         for key, value in all_keys.items():
+            if not key.startswith(self.setting_prefix):
+                logger.debug(f"Skipping non-matching saved-setting key: {key}")
+                continue
+
             # Remove the prefix to get the setting name
             setting_name = key[len(self.setting_prefix):]
-            saved_settings[setting_name] = value
+            if not setting_name:
+                logger.warning("Skipping malformed saved-setting key with empty suffix")
+                continue
+            saved_settings[setting_name] = str(value)
 
         return saved_settings
 
@@ -178,6 +204,9 @@ class SettingsManager:
         Returns:
             True if deleted successfully, False otherwise
         """
+        if not setting_name:
+            logger.error("Setting name must not be empty")
+            return False
         try:
             key = f"{self.setting_prefix}{setting_name}"
             self.configdb.delete(key)
@@ -185,4 +214,5 @@ class SettingsManager:
             return True
         except Exception as e:
             logger.error(f"Error deleting saved setting '{setting_name}': {e}")
+            logger.debug("delete_saved_setting exception details", exc_info=True)
             return False

@@ -157,5 +157,77 @@ class TestWifiMainRegression(unittest.TestCase):
         self.assertEqual(code, 1)
 
 
+class TestWifiConnectionRegression(unittest.TestCase):
+    """Regression tests for WiFi connection helpers."""
+
+    @patch("configurator.wifi.subprocess.run")
+    def test_scan_with_iw_maps_2484_to_channel_14(self, mock_run):
+        mock_run.return_value = _cp(
+            0,
+            "\n".join(
+                [
+                    "BSS 00:11:22:33:44:55(on wlan0)",
+                    "\tfreq: 2484",
+                    "\tsignal: -45.00 dBm",
+                    "\tSSID: ch14-net",
+                ]
+            ),
+            "",
+        )
+
+        networks = wifi.scan_with_iw("wlan0", timeout=1)
+
+        self.assertEqual(len(networks), 1)
+        self.assertEqual(networks[0]["channel"], "14")
+
+    @patch("configurator.wifi.subprocess.run")
+    def test_save_current_connection_accepts_80211_wireless_type(self, mock_run):
+        mock_run.side_effect = [
+            _cp(0, "ProfileX:wlan0:802-11-wireless\n", ""),
+            _cp(0, "802-11-wireless.ssid:HomeNet\n", ""),
+        ]
+
+        connection = wifi.save_current_connection()
+
+        self.assertIsNotNone(connection)
+        self.assertEqual(connection["name"], "ProfileX")
+        self.assertEqual(connection["ssid"], "HomeNet")
+
+    @patch("configurator.wifi.find_wireless_interfaces", return_value=["wlan0"])
+    @patch("configurator.wifi.subprocess.run")
+    def test_connect_uses_existing_profile_with_escaped_colon_name(self, mock_run, _mock_interfaces):
+        ssid = "Cafe:Net"
+        mock_run.side_effect = [
+            _cp(0, "active\n", ""),
+            _cp(0, "Cafe\\:Net\n", ""),
+            _cp(0, "", ""),
+            _cp(0, "Cafe\\:Net:wifi\n", ""),
+            _cp(0, "802-11-wireless.ssid:Cafe:Net\n", ""),
+        ]
+
+        result = wifi.connect_to_wifi(ssid)
+
+        self.assertTrue(result)
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        self.assertIn(["nmcli", "connection", "up", "Cafe:Net"], commands)
+
+    @patch("configurator.wifi.find_wireless_interfaces", return_value=["wlan0"])
+    @patch("configurator.wifi.subprocess.run")
+    def test_connect_fails_when_device_connected_to_different_network(self, mock_run, _mock_interfaces):
+        mock_run.side_effect = [
+            _cp(0, "active\n", ""),
+            _cp(0, "Target\n", ""),
+            _cp(0, "", ""),
+            _cp(0, "OtherConn:wifi\n", ""),
+            _cp(0, "802-11-wireless.ssid:OtherSSID\n", ""),
+            _cp(0, "GENERAL.CONNECTION:OtherConn\n", ""),
+            _cp(0, "802-11-wireless.ssid:OtherSSID\n", ""),
+        ]
+
+        result = wifi.connect_to_wifi("Target")
+
+        self.assertFalse(result)
+
+
 if __name__ == "__main__":
     unittest.main()

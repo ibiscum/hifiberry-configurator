@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the execution flow of [src/configtxt.py](src/configtxt.py), exposed as the `config-configtxt` CLI command.
+This document describes the execution flow of [src/configurator/configtxt.py](src/configurator/configtxt.py), exposed as the `config-configtxt` CLI command.
 
 ## Entry Point
 
@@ -42,7 +42,7 @@ flowchart TD
 
 ### ConfigTxt.__init__ and _read_file
 
-Functions: [src/configtxt.py](src/configtxt.py)
+Functions: [src/configurator/configtxt.py](src/configurator/configtxt.py)
 
 1. Uses `/boot/firmware/config.txt` by default.
 2. Reads full file into `self.lines`.
@@ -51,7 +51,7 @@ Functions: [src/configtxt.py](src/configtxt.py)
 
 ### save
 
-Function: [src/configtxt.py](src/configtxt.py)
+Function: [src/configurator/configtxt.py](src/configurator/configtxt.py)
 
 1. Recomputes checksum from current `self.lines`.
 2. If changed:
@@ -68,7 +68,7 @@ All operations mutate `self.lines` in memory before `save()` decides whether to 
 
 ### Overlay and detection operations
 
-Functions in [src/configtxt.py](src/configtxt.py):
+Functions in [src/configurator/configtxt.py](src/configurator/configtxt.py):
 
 - `enable_overlay(overlay, card_name=None, disable_eeprom=False)`
 - `remove_hifiberry_overlays()`
@@ -80,12 +80,12 @@ Important behavior:
 
 - `autodetect_overlay()` first honors detection-disabled comment.
 - It removes existing HiFiBerry overlays before applying a detected one.
-- It resolves overlay names through `SOUND_CARD_DEFINITIONS` from [src/soundcard.py](src/soundcard.py).
+- It resolves overlay names through `SOUND_CARD_DEFINITIONS` from [src/configurator/soundcard.py](src/configurator/soundcard.py).
 - If no card is detected, fallback overlay is `hifiberry-dac`.
 
 ### Audio and interface toggles
 
-Functions in [src/configtxt.py](src/configtxt.py):
+Functions in [src/configurator/configtxt.py](src/configurator/configtxt.py):
 
 - onboard sound: `enable_onboard_sound()`, `disable_onboard_sound()`
 - HDMI sound: `enable_hdmi_sound()`, `disable_hdmi_sound()`
@@ -104,7 +104,7 @@ Implementation helpers:
 
 ## CLI Flag Flow (main)
 
-Function: [src/configtxt.py](src/configtxt.py)
+Function: [src/configurator/configtxt.py](src/configurator/configtxt.py)
 
 1. Parses independent boolean flags and optional `--overlay` value.
 2. Instantiates `ConfigTxt`.
@@ -127,3 +127,4 @@ Function: [src/configtxt.py](src/configtxt.py)
 - The command is idempotent for repeated runs with identical resulting state.
 - Multiple flags can be combined in one invocation, and all selected mutations are applied before save.
 - `--report-change` inverts typical success semantics for automation: changed state maps to non-zero exit code.
+- `--remove-hifiberry` removes overlays plus associated HiFiBerry metadata lines (detection-disabled marker, card comments, and `force_eeprom_read=` entries).

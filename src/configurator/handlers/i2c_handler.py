@@ -16,9 +16,9 @@ try:
     from flask import jsonify, request
 except ImportError:
     # Flask is optional - only needed when running with Flask
-    def jsonify(*args: Any, **kwargs: Any) -> Any:  # type: ignore
+    def jsonify(payload: Any) -> Any:  # type: ignore
         """Stub jsonify when Flask is not installed."""
-        raise RuntimeError("Flask is not installed")
+        return payload
 
     class StubArgs:  # pylint: disable=too-few-public-methods
         """Stub request args object when Flask is unavailable."""

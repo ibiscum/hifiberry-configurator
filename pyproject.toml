@@ -18,9 +18,10 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-# Falls Ihr Skript zwingend Python-Abhängigkeiten benötigt, tragen Sie diese hier ein.
-# Wenn der Debian-Build die Paketabhängigkeiten exklusiv über debian/control regelt,
-# kann dieses Array auch komplett leer gelassen werden [], um Build-Fehler zu vermeiden.
+# If your script strictly requires Python dependencies, list them here.
+# If the Debian build manages package dependencies exclusively via
+# debian/control, this array can be left completely empty
+# as [], to avoid build errors.
 dependencies = []
 
 [project.scripts]

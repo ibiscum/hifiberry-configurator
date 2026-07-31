@@ -9,7 +9,6 @@ Provides both simple text output and structured data for REST API consumption.
 import logging
 import sys
 import argparse
-import subprocess
 from typing import Dict, Any, Optional, Tuple
 
 # Import from other configurator modules
@@ -148,21 +147,18 @@ class SystemInfo:
             self.logger.error(f"Failed to get hostnames: {e}")
             return None, None
 
-    def _is_soundcard_fixed_in_config_txt(self, soundcard: Soundcard) -> bool:
+    def _is_soundcard_fixed_in_config_txt(self) -> bool:
         """
         Check if soundcard detection is disabled via config.txt comment.
 
         Returns True only if the "# HiFiBerry sound detection disabled" comment is present,
         indicating the user has explicitly configured a fixed sound card.
 
-        Args:
-            soundcard: Soundcard object with detected card information
-
         Returns:
             bool: True if config.txt contains the detection disabled comment, False otherwise
         """
         try:
-            from src.configurator.configtxt import HIFIBERRY_DETECTION_DISABLED
+            from configurator.configtxt import HIFIBERRY_DETECTION_DISABLED
 
             # Read config.txt
             with open('/boot/firmware/config.txt', 'r') as f:
@@ -171,8 +167,7 @@ class SystemInfo:
             # Check if the detection disabled comment is present
             return HIFIBERRY_DETECTION_DISABLED in config_content
 
-        except subprocess.CalledProcessError:
-            # aplay -l failed (no sound cards found)
+        except FileNotFoundError:
             return False
         except Exception as e:
             self.logger.warning(f"Could not check config.txt for detection disabled comment: {e}")
@@ -192,14 +187,14 @@ class SystemInfo:
             None (auto-detected, no pin in effect).
         """
         try:
-            from src.configurator.configdb import ConfigDB
+            from configurator.configdb import ConfigDB
             if ConfigDB().get("soundcard.name"):
                 return "configdb"
         except Exception as e:
             self.logger.debug(f"Could not check ConfigDB for soundcard.name: {e}")
 
         try:
-            from src.configurator.soundcard_detector import SoundcardDetector
+            from configurator.soundcard_detector import SoundcardDetector
             if SoundcardDetector().detect_from_config_txt_comment():
                 return "config.txt"
         except Exception as e:
@@ -218,7 +213,7 @@ class SystemInfo:
             soundcard = self._get_soundcard(prioritize_aplay=True)
 
             # Check if the detected card is actually configured/loaded correctly
-            fixed_in_config_txt = self._is_soundcard_fixed_in_config_txt(soundcard)
+            fixed_in_config_txt = self._is_soundcard_fixed_in_config_txt()
             pin_source = self._get_soundcard_pin_source()
 
             result: dict[str, Any] = {
@@ -240,8 +235,6 @@ class SystemInfo:
 
         except Exception as e:
             self.logger.error(f"Failed to get sound card info: {e}")
-            import traceback
-            traceback.print_exc()
 
             return {
                 'name': 'unknown',
@@ -254,7 +247,8 @@ class SystemInfo:
                 'hat_name': None,
                 'supports_dsp': False,
                 'card_type': [],
-                'fixedInConfigTxt': False
+                'fixedInConfigTxt': False,
+                'pinSource': None
             }
 
     def get_system_info_dict(self) -> dict[str, Any]:
@@ -308,13 +302,16 @@ class SystemInfo:
                 'soundcard': {
                     'name': 'unknown',
                     'volume_control': None,
+                    'headphone_volume_control': None,
                     'hardware_index': None,
                     'output_channels': 0,
                     'input_channels': 0,
                     'features': [],
                     'hat_name': None,
                     'supports_dsp': False,
-                    'card_type': []
+                    'card_type': [],
+                    'fixedInConfigTxt': False,
+                    'pinSource': None
                 },
                 'system': {
                     'uuid': None,

@@ -107,6 +107,31 @@ def _split_nmcli_terse_line(line: str) -> List[str]:
     fields.append(''.join(current))
     return fields
 
+
+def _is_wifi_connection_type(connection_type: str) -> bool:
+    """Return True when nmcli connection type represents WiFi."""
+    return connection_type in {'wifi', '802-11-wireless'}
+
+
+def _get_connection_ssid(connection_name: str) -> Optional[str]:
+    """Fetch SSID associated with an nmcli connection profile."""
+    try:
+        cmd = ['nmcli', '-t', '-f', '802-11-wireless.ssid', 'connection', 'show', connection_name]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+
+        if result.returncode != 0:
+            return None
+
+        for line in result.stdout.splitlines():
+            if line.startswith('802-11-wireless.ssid:'):
+                ssid = line.split(':', 1)[1].strip()
+                if ssid:
+                    return ssid
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return None
+
+    return None
+
 def find_wireless_interfaces() -> List[str]:
     """
     Find available wireless interfaces.
@@ -337,7 +362,9 @@ def scan_with_iw(interface: str, timeout: int) -> List[Dict[str, Any]]:
                     try:
                         freq_num = int(freq)
                         # 2.4 GHz band
-                        if 2412 <= freq_num <= 2484:
+                        if freq_num == 2484:
+                            channel = 14
+                        elif 2412 <= freq_num <= 2472:
                             channel = (freq_num - 2407) // 5
                         # 5 GHz band
                         elif freq_num >= 5000:
@@ -382,9 +409,8 @@ def save_current_connection() -> Optional[Dict[str, Any]]:
 
         if result.returncode == 0:
             for line in result.stdout.splitlines():
-                if ':wifi' in line:
-                    fields = _split_nmcli_terse_line(line)
-                    if len(fields) >= 2:
+                fields = _split_nmcli_terse_line(line)
+                if len(fields) >= 3 and _is_wifi_connection_type(fields[2]):
                         connection_name = fields[0]
                         device = fields[1]
 
@@ -573,9 +599,10 @@ def connect_to_wifi(ssid: str, passphrase: Optional[str] = None,
 
         if result.returncode == 0:
             for line in result.stdout.splitlines():
-                if line == ssid or line.startswith(f"{ssid}:"):
+                profile_name = _split_nmcli_terse_line(line)[0]
+                if profile_name == ssid:
                     connection_exists = True
-                    connection_name = line.split(':', 1)[0]
+                    connection_name = profile_name
                     logger.debug(f"Found existing connection profile: {connection_name}")
                     break
 
@@ -621,9 +648,10 @@ def connect_to_wifi(ssid: str, passphrase: Optional[str] = None,
             active_conn_name = ""
 
             for line in verify_result.stdout.splitlines():
-                if ':802-11-wireless' in line or ':wifi' in line:
+                fields = _split_nmcli_terse_line(line)
+                if len(fields) >= 2 and _is_wifi_connection_type(fields[1]):
                     has_active_wifi = True
-                    active_conn_name = line.split(':', 1)[0]
+                    active_conn_name = fields[0]
                     logger.debug(f"Found active WiFi connection: {active_conn_name}")
                     break
 
@@ -650,11 +678,13 @@ def connect_to_wifi(ssid: str, passphrase: Optional[str] = None,
                     for line in device_details.stdout.splitlines():
                         if ':' in line:
                             _, conn_name = line.split(':', 1)
+                            conn_name = conn_name.strip()
                             logger.debug(f"Device is connected to: {conn_name}")
-                            # If we just activated a connection and the device is connected, assume success
                             if conn_name:
-                                logger.info("Device is connected to network, assuming success")
-                                return True
+                                conn_ssid = _get_connection_ssid(conn_name)
+                                if conn_ssid == ssid:
+                                    logger.info(f"Successfully connected to {ssid}")
+                                    return True
 
             logger.error(f"Failed to verify connection to {ssid}")
             return _handle_connection_failure(old_connection, revert_on_failure)
