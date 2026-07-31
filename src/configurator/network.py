@@ -733,8 +733,6 @@ def main():
 
                 # Log detailed info at debug level
                 logger.debug(f"Interface: {name} ({iface_type})")
-                logger.debug(f"  MAC Address: {mac}")
-                logger.debug(f"  IPv4 Address: {ipv4}")
                 logger.debug(f"  State: {state}")
 
                 if args.long:

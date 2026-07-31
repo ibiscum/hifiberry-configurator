@@ -12,10 +12,12 @@ import sys
 import json
 import os
 import pwd
+import re
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 # Set up logging
 logger = logging.getLogger(__name__)
+SAFE_SERVICE_NAME_RE = re.compile(r'^[A-Za-z0-9_.@:-]+$')
 
 class SystemdServiceManager:
     """Manager for systemd service operations (supports system + user services)."""
@@ -33,6 +35,15 @@ class SystemdServiceManager:
         # Service environment mapping (service_name -> 'system' or 'user')
         self.service_environments = {}
         self._build_service_environment_map()
+
+    @staticmethod
+    def _normalize_service_name(service_name: str) -> Optional[str]:
+        """Normalize and validate a service name before using it in paths."""
+        normalized_name = service_name[:-8] if service_name.endswith('.service') else service_name
+        if not normalized_name or not SAFE_SERVICE_NAME_RE.fullmatch(normalized_name):
+            logger.warning("Rejected invalid service name: %s", service_name)
+            return None
+        return normalized_name
 
     def _run_command(self, command: List[str], env: Optional[Dict[str, str]] = None) -> Tuple[bool, str, str]:
         """
@@ -186,9 +197,9 @@ class SystemdServiceManager:
             'system', 'user', or None if service not found
         """
         # Normalize service name (remove .service suffix if present)
-        normalized_name = service_name
-        if normalized_name.endswith('.service'):
-            normalized_name = normalized_name[:-8]
+        normalized_name = self._normalize_service_name(service_name)
+        if normalized_name is None:
+            return None
 
         env = self.service_environments.get(normalized_name)
         if env:
@@ -225,6 +236,8 @@ class SystemdServiceManager:
     def _run_service_cmd(self, args: List[str], service_name: Optional[str] = None) -> Tuple[bool, str, str]:
         """Run a systemctl command in the correct environment for a service."""
         if service_name:
+            if self._normalize_service_name(service_name) is None:
+                return False, "", f"Invalid service name: {service_name}"
             env = self._get_service_environment(service_name)
             if env == 'user' and self.user_name and self.user_uid is not None and self.user_gid is not None:
                 # User service environment - use systemd-run for proper root-to-user switching
