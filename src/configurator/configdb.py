@@ -10,6 +10,7 @@ import sys
 import sqlite3
 import logging
 import argparse
+from contextlib import closing
 from typing import Any, Dict, List, Optional, cast
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -89,7 +90,7 @@ class ConfigDB:
                 return False
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS config (
@@ -168,7 +169,7 @@ class ConfigDB:
             The value for the key or default if not found
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT value FROM config WHERE key = ?", (key,))
                 result = cursor.fetchone()
@@ -218,7 +219,7 @@ class ConfigDB:
             # Encrypt value if needed
             encrypted_value = self.encrypt_value(value) if secure else value
 
-            with sqlite3.connect(self.db_path) as conn:
+            with closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
                     INSERT OR REPLACE INTO config (key, value, modified_at)
@@ -247,7 +248,7 @@ class ConfigDB:
             True if successful, False otherwise
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM config WHERE key = ?", (key,))
                 conn.commit()
@@ -267,7 +268,7 @@ class ConfigDB:
             List of keys
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.cursor()
 
                 if prefix:
@@ -289,7 +290,7 @@ class ConfigDB:
             True if successful, False otherwise
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM config")
                 count = cursor.rowcount
@@ -311,7 +312,7 @@ class ConfigDB:
             Dictionary of key/value pairs
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.cursor()
 
                 if prefix:

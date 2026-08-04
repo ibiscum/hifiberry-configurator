@@ -14,7 +14,7 @@ Tests the BLE WiFi provisioning server functionality for:
 
 import json
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import sys
 import os
 import importlib
@@ -40,6 +40,15 @@ sys.modules['src.network'] = MagicMock()
 
 from configurator.ble_provisioning import (  # noqa: E402
     BLEProvisioningServer,
+    CHAR_BLE_CONTROL,
+    CHAR_DEVICE_IDENTITY,
+    CHAR_NETWORK_STATUS,
+    CHAR_WIFI_CONNECT,
+    CHAR_WIFI_CONNECT_STATUS,
+    CHAR_WIFI_SCAN_RESULTS,
+    CHAR_WIFI_SCAN_TRIGGER,
+    MAX_SCAN_RESULTS,
+    SERVICE_UUID,
     has_network_connectivity,
     setup_logging,
     main,
@@ -374,6 +383,185 @@ class TestBLEProvisioningServer:
         server._handle_ble_control(bytearray(invalid_json))
         assert server._shutdown_requested is False
 
+    def test_on_read_dispatches_all_characteristics(self, server):
+        """Read callback should route to the correct payload helpers."""
+        with patch.object(server, "_get_device_identity", return_value=b"id") as mock_id, \
+            patch.object(server, "_get_network_status", return_value=b"net") as mock_net, \
+            patch.object(server, "_get_scan_results_bytes", return_value=b"scan") as mock_scan, \
+            patch.object(server, "_get_connect_status_bytes", return_value=b"conn") as mock_conn:
+            assert server._on_read(types.SimpleNamespace(uuid=CHAR_DEVICE_IDENTITY)) == bytearray(b"id")
+            assert server._on_read(types.SimpleNamespace(uuid=CHAR_NETWORK_STATUS)) == bytearray(b"net")
+            assert server._on_read(types.SimpleNamespace(uuid=CHAR_WIFI_SCAN_RESULTS)) == bytearray(b"scan")
+            assert server._on_read(types.SimpleNamespace(uuid=CHAR_WIFI_CONNECT_STATUS)) == bytearray(b"conn")
+            assert server._on_read(types.SimpleNamespace(uuid="00000000-0000-0000-0000-000000000000")) == bytearray(b"")
+
+        mock_id.assert_called_once()
+        mock_net.assert_called_once()
+        mock_scan.assert_called_once()
+        mock_conn.assert_called_once()
+
+    def test_on_write_dispatches_to_handlers(self, server):
+        """Write callback should route writes by characteristic UUID."""
+        value = bytearray(b"payload")
+        with patch.object(server, "_handle_scan_trigger") as mock_scan, \
+            patch.object(server, "_handle_wifi_connect") as mock_connect, \
+            patch.object(server, "_handle_ble_control") as mock_control:
+            server._on_write(types.SimpleNamespace(uuid=CHAR_WIFI_SCAN_TRIGGER), value)
+            server._on_write(types.SimpleNamespace(uuid=CHAR_WIFI_CONNECT), value)
+            server._on_write(types.SimpleNamespace(uuid=CHAR_BLE_CONTROL), value)
+            server._on_write(types.SimpleNamespace(uuid="00000000-0000-0000-0000-000000000000"), value)
+
+        mock_scan.assert_called_once_with(value)
+        mock_connect.assert_called_once_with(value)
+        mock_control.assert_called_once_with(value)
+
+    @pytest.mark.asyncio
+    async def test_do_wifi_scan_success_updates_characteristic(self, server):
+        """Successful scans should cache capped results and notify clients."""
+        networks = [
+            {"ssid": f"Net-{i}", "signal": -40 - i, "security": "WPA2"}
+            for i in range(MAX_SCAN_RESULTS + 3)
+        ]
+        char = MagicMock()
+        server.server = MagicMock()
+        server.server.get_characteristic.return_value = char
+
+        with patch("configurator.ble_provisioning.asyncio.to_thread", new=AsyncMock(return_value=networks)):
+            await server._do_wifi_scan()
+
+        assert len(server._scan_results) == MAX_SCAN_RESULTS
+        assert server._scan_results[0]["ssid"] == "Net-0"
+        server.server.get_characteristic.assert_called_with(CHAR_WIFI_SCAN_RESULTS)
+        server.server.update_value.assert_called_once_with(SERVICE_UUID, CHAR_WIFI_SCAN_RESULTS)
+        assert isinstance(char.value, bytearray)
+
+    @pytest.mark.asyncio
+    async def test_do_wifi_scan_failure_clears_results(self, server):
+        """Scan exceptions should clear cached scan results."""
+        server._scan_results = [{"ssid": "old", "signal": -99, "security": "WEP"}]
+
+        with patch(
+            "configurator.ble_provisioning.asyncio.to_thread",
+            new=AsyncMock(side_effect=RuntimeError("scan failed")),
+        ):
+            await server._do_wifi_scan()
+
+        assert server._scan_results == []
+
+    @pytest.mark.asyncio
+    async def test_do_wifi_connect_success_updates_network_status(self, server):
+        """Successful WiFi connect should transition to connected and notify."""
+        net_char = MagicMock()
+        server.server = MagicMock()
+        server.server.get_characteristic.return_value = net_char
+
+        with patch("configurator.ble_provisioning.asyncio.to_thread", new=AsyncMock(return_value=True)), \
+            patch.object(server, "_get_network_status", return_value=b"{}"), \
+            patch.object(server, "_notify_connect_status") as mock_notify:
+            await server._do_wifi_connect("TestWiFi", "secret")
+
+        assert server._connect_status == {"state": "connected", "ssid": "TestWiFi", "error": ""}
+        mock_notify.assert_called_once()
+        server.server.get_characteristic.assert_called_with(CHAR_NETWORK_STATUS)
+        server.server.update_value.assert_called_once_with(SERVICE_UUID, CHAR_NETWORK_STATUS)
+        assert isinstance(net_char.value, bytearray)
+
+    @pytest.mark.asyncio
+    async def test_do_wifi_connect_failed_result(self, server):
+        """A false backend result should become a failed state."""
+        with patch("configurator.ble_provisioning.asyncio.to_thread", new=AsyncMock(return_value=False)), \
+            patch.object(server, "_notify_connect_status") as mock_notify:
+            await server._do_wifi_connect("TestWiFi", "secret")
+
+        assert server._connect_status["state"] == "failed"
+        assert server._connect_status["error"] == "Connection failed"
+        mock_notify.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_do_wifi_connect_exception(self, server):
+        """Backend exceptions should propagate as failed connect status."""
+        with patch(
+            "configurator.ble_provisioning.asyncio.to_thread",
+            new=AsyncMock(side_effect=OSError("nmcli failure")),
+        ), patch.object(server, "_notify_connect_status") as mock_notify:
+            await server._do_wifi_connect("TestWiFi", None)
+
+        assert server._connect_status["state"] == "failed"
+        assert server._connect_status["error"] == "nmcli failure"
+        mock_notify.assert_called_once()
+
+    def test_notify_connect_status_no_server_is_noop(self, server):
+        """Notification helper should safely no-op when no server exists."""
+        server.server = None
+        server._notify_connect_status()
+
+    def test_notify_connect_status_updates_characteristic(self, server):
+        """Notification helper should update and publish status characteristic."""
+        status_char = MagicMock()
+        server.server = MagicMock()
+        server.server.get_characteristic.return_value = status_char
+
+        server._notify_connect_status()
+
+        server.server.get_characteristic.assert_called_once_with(CHAR_WIFI_CONNECT_STATUS)
+        server.server.update_value.assert_called_once_with(SERVICE_UUID, CHAR_WIFI_CONNECT_STATUS)
+        assert isinstance(status_char.value, bytearray)
+
+    @pytest.mark.asyncio
+    async def test_start_registers_services_and_characteristics(self, server):
+        """Server start should configure callbacks, GATT service, and characteristics."""
+        fake_server = MagicMock()
+        fake_server.add_new_service = AsyncMock()
+        fake_server.add_new_characteristic = AsyncMock()
+        fake_server.start = AsyncMock()
+
+        fake_props = types.SimpleNamespace(read=0x01, notify=0x02, write=0x04)
+        fake_perms = types.SimpleNamespace(readable=0x01, writeable=0x02)
+
+        with patch("configurator.ble_provisioning.BlessServer", return_value=fake_server), \
+            patch("configurator.ble_provisioning.asyncio.get_event_loop", return_value=MagicMock()), \
+            patch("configurator.ble_provisioning.GATTCharacteristicProperties", fake_props), \
+            patch("configurator.ble_provisioning.GATTAttributePermissions", fake_perms), \
+            patch.object(server, "_get_hostname", return_value="x" * 64), \
+            patch.object(server, "_get_device_identity", return_value=b"id"), \
+            patch.object(server, "_get_network_status", return_value=b"net"), \
+            patch.object(server, "_get_connect_status_bytes", return_value=b"conn"):
+            await server.start()
+
+        assert server.server is fake_server
+        assert fake_server.read_request_func == server._on_read
+        assert fake_server.write_request_func == server._on_write
+        fake_server.add_new_service.assert_called_once_with(SERVICE_UUID)
+        assert fake_server.add_new_characteristic.await_count == 7
+        fake_server.start.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_start_raises_when_server_init_fails(self, server):
+        """Start should fail fast when BlessServer initialization fails."""
+        with patch("configurator.ble_provisioning.BlessServer", return_value=None), \
+            patch("configurator.ble_provisioning.asyncio.get_event_loop", return_value=MagicMock()):
+            with pytest.raises(RuntimeError, match="Failed to initialize BLE server"):
+                await server.start()
+
+    @pytest.mark.asyncio
+    async def test_stop_shuts_down_server_and_clears_reference(self, server):
+        """Stop should await backend shutdown and clear server handle."""
+        backend = MagicMock()
+        backend.stop = AsyncMock()
+        server.server = backend
+        server._shutdown_requested = True
+
+        await server.stop()
+
+        backend.stop.assert_awaited_once()
+        assert server.server is None
+
+    @pytest.mark.asyncio
+    async def test_stop_no_server_is_noop(self, server):
+        """Stop should no-op when no backend server exists."""
+        server.server = None
+        await server.stop()
+
 
 class TestNetworkConnectivity:
     """Test cases for network connectivity check"""
@@ -514,3 +702,70 @@ class TestMainCLI:
                     main()
 
         mock_setup_logging.assert_called()
+
+    @patch("configurator.ble_provisioning.BLEProvisioningServer")
+    @patch("configurator.ble_provisioning.asyncio.set_event_loop")
+    @patch("configurator.ble_provisioning.asyncio.new_event_loop")
+    def test_main_serve_happy_path(self, mock_new_loop, mock_set_loop, mock_server_cls):
+        """Serve mode should start, run, and stop the provisioner cleanly."""
+        loop = MagicMock()
+        mock_new_loop.return_value = loop
+        provisioner = MagicMock()
+        provisioner.start = MagicMock()
+        provisioner.stop = MagicMock()
+        mock_server_cls.return_value = provisioner
+
+        with patch("sys.argv", ["ble-provisioning", "--serve"]):
+            main()
+
+        mock_set_loop.assert_called_once_with(loop)
+        assert loop.add_signal_handler.call_count == 2
+        assert loop.run_until_complete.call_count == 2
+        loop.run_forever.assert_called_once()
+        loop.close.assert_called_once()
+
+    @patch("configurator.ble_provisioning.BLEProvisioningServer")
+    @patch("configurator.ble_provisioning.asyncio.set_event_loop")
+    @patch("configurator.ble_provisioning.asyncio.new_event_loop")
+    def test_main_serve_signal_handler_stops_loop(self, mock_new_loop, mock_set_loop, mock_server_cls):
+        """Serve mode should register a signal handler that stops the loop."""
+        loop = MagicMock()
+        captured_callbacks = []
+
+        def capture_handler(_sig, callback):
+            captured_callbacks.append(callback)
+
+        loop.add_signal_handler.side_effect = capture_handler
+        mock_new_loop.return_value = loop
+
+        provisioner = MagicMock()
+        provisioner.start = MagicMock()
+        provisioner.stop = MagicMock()
+        mock_server_cls.return_value = provisioner
+
+        with patch("sys.argv", ["ble-provisioning", "--serve"]):
+            main()
+
+        assert len(captured_callbacks) == 2
+        captured_callbacks[0]()
+        loop.stop.assert_called_once()
+
+    @patch("configurator.ble_provisioning.BLEProvisioningServer")
+    @patch("configurator.ble_provisioning.asyncio.set_event_loop")
+    @patch("configurator.ble_provisioning.asyncio.new_event_loop")
+    def test_main_serve_start_error_still_runs_finally(self, mock_new_loop, mock_set_loop, mock_server_cls):
+        """Serve mode should still execute stop/close in finally on startup error."""
+        loop = MagicMock()
+        loop.run_until_complete.side_effect = [RuntimeError("start failed"), None]
+        mock_new_loop.return_value = loop
+        provisioner = MagicMock()
+        provisioner.start = MagicMock()
+        provisioner.stop = MagicMock()
+        mock_server_cls.return_value = provisioner
+
+        with patch("sys.argv", ["ble-provisioning", "--serve"]):
+            main()
+
+        mock_set_loop.assert_called_once_with(loop)
+        loop.run_forever.assert_not_called()
+        loop.close.assert_called_once()

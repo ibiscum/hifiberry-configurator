@@ -6,6 +6,7 @@ error handling, and data formatting.
 """
 
 import unittest
+import argparse
 from unittest.mock import patch, MagicMock, mock_open
 
 from configurator.systeminfo import SystemInfo
@@ -506,6 +507,162 @@ class TestErrorHandling(unittest.TestCase):
         # Should still return a dict with error status
         self.assertEqual(result['status'], 'error')
         self.assertIn('error', result)
+
+
+class TestMemoryInfo(unittest.TestCase):
+    """Tests for _get_memory_info parsing and error handling."""
+
+    @patch('configurator.systeminfo.open', new_callable=mock_open,
+           read_data="MemTotal:       1572864 kB\nMemFree:          1024 kB\n")
+    def test_get_memory_info_parses_memtotal(self, _mock_file):
+        info = SystemInfo()
+        result = info._get_memory_info()
+
+        self.assertEqual(result['total_kb'], 1572864)
+        self.assertEqual(result['total_mb'], 1536)
+        self.assertEqual(result['total_gb'], 2)
+
+    @patch('configurator.systeminfo.open', new_callable=mock_open,
+           read_data="MemFree: 1234 kB\n")
+    def test_get_memory_info_without_memtotal_returns_empty_dict(self, _mock_file):
+        info = SystemInfo()
+        result = info._get_memory_info()
+
+        self.assertEqual(result, {})
+
+    @patch('configurator.systeminfo.open', side_effect=OSError("cannot read"))
+    def test_get_memory_info_exception_returns_unknowns(self, _mock_file):
+        info = SystemInfo()
+        result = info._get_memory_info()
+
+        self.assertEqual(result['total_kb'], None)
+        self.assertEqual(result['total_mb'], None)
+        self.assertEqual(result['total_gb'], None)
+
+
+class TestSoundcardPinSource(unittest.TestCase):
+    """Tests for _get_soundcard_pin_source helper branching."""
+
+    @patch('configurator.configdb.ConfigDB')
+    def test_get_soundcard_pin_source_prefers_configdb(self, mock_configdb):
+        mock_configdb.return_value.get.return_value = "DAC2 Pro"
+
+        info = SystemInfo()
+        result = info._get_soundcard_pin_source()
+
+        self.assertEqual(result, 'configdb')
+
+    @patch('configurator.soundcard_detector.SoundcardDetector')
+    @patch('configurator.configdb.ConfigDB')
+    def test_get_soundcard_pin_source_uses_config_txt_when_db_empty(self, mock_configdb, mock_detector):
+        mock_configdb.return_value.get.return_value = None
+        mock_detector.return_value.detect_from_config_txt_comment.return_value = True
+
+        info = SystemInfo()
+        result = info._get_soundcard_pin_source()
+
+        self.assertEqual(result, 'config.txt')
+
+    @patch('configurator.soundcard_detector.SoundcardDetector')
+    @patch('configurator.configdb.ConfigDB', side_effect=Exception("db unavailable"))
+    def test_get_soundcard_pin_source_returns_none_when_no_pin_found(self, _mock_db, mock_detector):
+        mock_detector.return_value.detect_from_config_txt_comment.return_value = False
+
+        info = SystemInfo()
+        result = info._get_soundcard_pin_source()
+
+        self.assertIsNone(result)
+
+    @patch('configurator.soundcard_detector.SoundcardDetector', side_effect=Exception("detector unavailable"))
+    @patch('configurator.configdb.ConfigDB', side_effect=Exception("db unavailable"))
+    def test_get_soundcard_pin_source_handles_both_sources_failing(self, _mock_db, _mock_detector):
+        info = SystemInfo()
+        result = info._get_soundcard_pin_source()
+
+        self.assertIsNone(result)
+
+
+class TestDetectionDisabledMarkerEdgeCases(unittest.TestCase):
+    """Additional tests for config.txt marker checks."""
+
+    @patch('configurator.systeminfo.open', new_callable=mock_open, read_data="# not the marker\n")
+    @patch('configurator.configtxt.HIFIBERRY_DETECTION_DISABLED', "# HiFiBerry sound detection disabled")
+    def test_is_soundcard_fixed_in_config_txt_false_without_marker(self, _mock_open):
+        info = SystemInfo()
+        self.assertFalse(info._is_soundcard_fixed_in_config_txt())
+
+    @patch('configurator.systeminfo.open', side_effect=OSError("cannot read config"))
+    def test_is_soundcard_fixed_in_config_txt_generic_exception(self, _mock_open):
+        info = SystemInfo()
+        self.assertFalse(info._is_soundcard_fixed_in_config_txt())
+
+
+class TestSystemInfoCLI(unittest.TestCase):
+    """Tests for CLI helpers and main entrypoint."""
+
+    def test_parse_arguments_defaults(self):
+        with patch('sys.argv', ['systeminfo']):
+            args = __import__('configurator.systeminfo', fromlist=['parse_arguments']).parse_arguments()
+
+        self.assertFalse(args.verbose)
+        self.assertFalse(args.json)
+
+    def test_parse_arguments_verbose_and_json(self):
+        with patch('sys.argv', ['systeminfo', '--verbose', '--json']):
+            args = __import__('configurator.systeminfo', fromlist=['parse_arguments']).parse_arguments()
+
+        self.assertTrue(args.verbose)
+        self.assertTrue(args.json)
+
+    def test_setup_logging_uses_stderr_stream(self):
+        module = __import__('configurator.systeminfo', fromlist=['setup_logging'])
+
+        root_logger = module.logging.getLogger()
+        original_handlers = list(root_logger.handlers)
+        original_level = root_logger.level
+
+        try:
+            module.setup_logging(verbose=True)
+
+            self.assertEqual(root_logger.level, module.logging.DEBUG)
+            self.assertEqual(len(root_logger.handlers), 1)
+            handler = root_logger.handlers[0]
+            self.assertEqual(handler.level, module.logging.DEBUG)
+            self.assertIs(handler.stream, module.sys.stderr)
+        finally:
+            for handler in root_logger.handlers[:]:
+                root_logger.removeHandler(handler)
+            for handler in original_handlers:
+                root_logger.addHandler(handler)
+            root_logger.setLevel(original_level)
+
+    @patch('builtins.print')
+    @patch('json.dumps', return_value='{"ok": true}')
+    @patch('configurator.systeminfo.SystemInfo')
+    @patch('configurator.systeminfo.setup_logging')
+    @patch('configurator.systeminfo.parse_arguments')
+    def test_main_json_mode_prints_flat_json(self, mock_parse, mock_setup, mock_info_cls, _mock_dumps, mock_print):
+        mock_parse.return_value = argparse.Namespace(verbose=True, json=True)
+        mock_info_cls.return_value.get_flat_info_dict.return_value = {'Pi Model': 'Pi 4'}
+
+        module = __import__('configurator.systeminfo', fromlist=['main'])
+        module.main()
+
+        mock_setup.assert_called_once_with(True)
+        mock_info_cls.return_value.get_flat_info_dict.assert_called_once()
+        mock_print.assert_called_once_with('{"ok": true}')
+
+    @patch('configurator.systeminfo.SystemInfo')
+    @patch('configurator.systeminfo.setup_logging')
+    @patch('configurator.systeminfo.parse_arguments')
+    def test_main_text_mode_prints_simple_output(self, mock_parse, mock_setup, mock_info_cls):
+        mock_parse.return_value = argparse.Namespace(verbose=False, json=False)
+
+        module = __import__('configurator.systeminfo', fromlist=['main'])
+        module.main()
+
+        mock_setup.assert_called_once_with(False)
+        mock_info_cls.return_value.print_simple_output.assert_called_once()
 
 
 if __name__ == '__main__':

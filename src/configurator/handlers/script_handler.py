@@ -22,7 +22,10 @@ if TYPE_CHECKING:
 try:
     from flask import jsonify, request
 except ImportError:
-    jsonify = None  # type: ignore[assignment]
+    def jsonify(*args: Any, **kwargs: Any) -> Any:  # type: ignore
+        """Stub jsonify when Flask is not installed."""
+        raise RuntimeError("Flask is not installed")
+
     request = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)

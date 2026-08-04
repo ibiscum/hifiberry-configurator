@@ -61,6 +61,14 @@ Run the test suite with:
 python3 -m pytest -q
 ```
 
+For consistent dev/CI coverage reporting (using settings from `pyproject.toml`), run:
+
+```bash
+python3 -m pytest -q --cov --cov-report=term-missing --cov-report=xml
+```
+
+Note: Coverage/test execution is intended for local development and CI, not for Debian package builds.
+
 ## Debugging
 
 ```bash

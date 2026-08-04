@@ -684,5 +684,397 @@ class TestVolumeCliRegression(unittest.TestCase):
         self.assertEqual(result, 1)
 
 
+class TestAlsaModePaths(unittest.TestCase):
+    """Cover direct ALSA API branches that are not exercised by subprocess fallbacks."""
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_get_current_volume_alsa_success(self, mock_alsa):
+        mixer = MagicMock()
+        mixer.getvolume.return_value = [64, 64]
+        mock_alsa.Mixer.return_value = mixer
+
+        result = get_current_volume(0, 'PCM')
+
+        self.assertEqual(result, '64')
+        mock_alsa.Mixer.assert_called_once_with('PCM', cardindex=0)
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_get_current_volume_alsa_no_volume_data(self, mock_alsa):
+        mixer = MagicMock()
+        mixer.getvolume.return_value = []
+        mock_alsa.Mixer.return_value = mixer
+
+        self.assertIsNone(get_current_volume(1, 'PCM'))
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_get_current_volume_alsa_exception(self, mock_alsa):
+        mock_alsa.Mixer.side_effect = Exception('alsa failure')
+        self.assertIsNone(get_current_volume(1, 'PCM'))
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_set_volume_alsa_success_clamps_to_max(self, mock_alsa):
+        mixer = MagicMock()
+        mock_alsa.Mixer.return_value = mixer
+
+        self.assertTrue(set_volume(0, 'PCM', '140'))
+        mixer.setvolume.assert_called_once_with(100)
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_set_volume_alsa_invalid_value(self, mock_alsa):
+        mock_alsa.Mixer.return_value = MagicMock()
+        self.assertFalse(set_volume(0, 'PCM', 'not-a-number'))
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_set_volume_alsa_exception(self, mock_alsa):
+        mock_alsa.Mixer.side_effect = Exception('alsa set fail')
+        self.assertFalse(set_volume(0, 'PCM', '50'))
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_pipewire_available_alsa_true(self, mock_alsa):
+        mock_alsa.Mixer.return_value = MagicMock()
+        self.assertTrue(is_pipewire_available())
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_pipewire_available_alsa_false(self, mock_alsa):
+        mock_alsa.Mixer.side_effect = Exception('missing')
+        self.assertFalse(is_pipewire_available())
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_get_pipewire_volume_alsa_capture_uses_id0(self, mock_alsa):
+        mixer = MagicMock()
+        mixer.getvolume.return_value = [33]
+        mock_alsa.Mixer.return_value = mixer
+
+        self.assertEqual(get_pipewire_volume('Capture'), '33')
+        mock_alsa.Mixer.assert_called_once_with('Capture', id=0, cardindex=-1)
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_get_pipewire_volume_alsa_no_data(self, mock_alsa):
+        mixer = MagicMock()
+        mixer.getvolume.return_value = []
+        mock_alsa.Mixer.return_value = mixer
+
+        self.assertIsNone(get_pipewire_volume('Master'))
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_get_pipewire_volume_alsa_exception(self, mock_alsa):
+        mock_alsa.Mixer.side_effect = Exception('pw read fail')
+        self.assertIsNone(get_pipewire_volume('Master'))
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_set_pipewire_volume_alsa_success_clamps(self, mock_alsa):
+        mixer = MagicMock()
+        mock_alsa.Mixer.return_value = mixer
+
+        self.assertTrue(set_pipewire_volume('Capture', '-20'))
+        mixer.setvolume.assert_called_once_with(0)
+        mock_alsa.Mixer.assert_called_once_with('Capture', id=0, cardindex=-1)
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_set_pipewire_volume_alsa_invalid_value(self, mock_alsa):
+        mock_alsa.Mixer.return_value = MagicMock()
+        self.assertFalse(set_pipewire_volume('Master', 'oops'))
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_set_pipewire_volume_alsa_exception(self, mock_alsa):
+        mock_alsa.Mixer.side_effect = Exception('pw set fail')
+        self.assertFalse(set_pipewire_volume('Master', '50'))
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_list_available_controls_alsa_with_card(self, mock_alsa):
+        mock_alsa.mixers.return_value = ['Master', 'PCM']
+        self.assertEqual(list_available_controls(2), ['Master', 'PCM'])
+        mock_alsa.mixers.assert_called_once_with(cardindex=2)
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_list_available_controls_alsa_default(self, mock_alsa):
+        mock_alsa.mixers.return_value = ['Master']
+        self.assertEqual(list_available_controls(), ['Master'])
+        mock_alsa.mixers.assert_called_once_with()
+
+    @patch('configurator.volume.alsa_available', True)
+    @patch('configurator.volume.alsaaudio', create=True)
+    def test_list_available_controls_alsa_exception(self, mock_alsa):
+        mock_alsa.mixers.side_effect = Exception('mixers fail')
+        self.assertEqual(list_available_controls(1), [])
+
+
+class TestHeadphoneBranchCoverage(unittest.TestCase):
+    """Add missing error-path tests for headphone helpers."""
+
+    @patch('configurator.volume.get_cached_card_index', return_value=None)
+    def test_get_headphone_volume_no_card(self, _mock_card):
+        self.assertEqual(get_headphone_volume(), (None, None))
+
+    @patch('configurator.volume.get_cached_card_index', return_value=0)
+    @patch('configurator.volume.get_available_headphone_controls', return_value=['Headphone'])
+    @patch('configurator.volume.get_current_volume', return_value=None)
+    def test_get_headphone_volume_get_current_fails(self, _mock_get, _mock_controls, _mock_card):
+        self.assertEqual(get_headphone_volume(), (None, None))
+
+    @patch('configurator.volume.get_cached_card_index', return_value=None)
+    def test_set_headphone_volume_no_card(self, _mock_card):
+        self.assertFalse(set_headphone_volume('50'))
+
+    @patch('configurator.volume.get_cached_card_index', return_value=0)
+    @patch('configurator.volume.get_available_headphone_controls', return_value=['Headphone'])
+    @patch('configurator.volume.set_volume', return_value=False)
+    def test_set_headphone_volume_set_fails(self, _mock_set, _mock_controls, _mock_card):
+        self.assertFalse(set_headphone_volume('50'))
+
+    @patch('configurator.volume.get_cached_card_index', return_value=0)
+    @patch('configurator.volume.get_available_headphone_controls', return_value=['Headphone'])
+    @patch('configurator.volume.get_current_volume', return_value=None)
+    def test_store_headphone_volume_no_current_volume(self, _mock_get, _mock_controls, _mock_card):
+        self.assertFalse(store_headphone_volume())
+
+    @patch('configurator.volume.ConfigDB')
+    @patch('configurator.volume.get_cached_card_index', return_value=None)
+    def test_restore_headphone_volume_no_card(self, _mock_card, mock_db_class):
+        mock_db = MagicMock()
+        mock_db_class.return_value = mock_db
+        mock_db.get.side_effect = lambda key: {
+            'system.volume.headphone': '40',
+            'system.volume.headphone.card': '0',
+            'system.volume.headphone.control': 'Headphone',
+        }.get(key)
+        self.assertFalse(restore_headphone_volume())
+
+    @patch('configurator.volume.ConfigDB')
+    @patch('configurator.volume.get_cached_card_index', return_value=0)
+    @patch('configurator.volume.get_available_headphone_controls', return_value=[])
+    def test_restore_headphone_volume_no_controls(self, _mock_controls, _mock_card, mock_db_class):
+        mock_db = MagicMock()
+        mock_db_class.return_value = mock_db
+        mock_db.get.side_effect = lambda key: {
+            'system.volume.headphone': '40',
+            'system.volume.headphone.card': '0',
+            'system.volume.headphone.control': 'Headphone',
+        }.get(key)
+        self.assertFalse(restore_headphone_volume())
+
+    @patch('configurator.volume.ConfigDB')
+    @patch('configurator.volume.get_cached_card_index', return_value=0)
+    @patch('configurator.volume.get_available_headphone_controls', return_value=['Headphone'])
+    @patch('configurator.volume.set_volume', return_value=False)
+    def test_restore_headphone_volume_set_fails(self, _mock_set, _mock_controls, _mock_card, mock_db_class):
+        mock_db = MagicMock()
+        mock_db_class.return_value = mock_db
+        mock_db.get.side_effect = lambda key: {
+            'system.volume.headphone': '40',
+            'system.volume.headphone.card': '0',
+            'system.volume.headphone.control': 'Headphone',
+        }.get(key)
+        self.assertFalse(restore_headphone_volume())
+
+
+class TestVolumeCliAdditionalBranches(unittest.TestCase):
+    """Exercise remaining CLI operations and return-code branches."""
+
+    @patch('sys.argv', ['config-volume', '--get-headphone'])
+    @patch('configurator.volume.get_headphone_volume', return_value=('55', 'Headphone'))
+    def test_main_get_headphone_success(self, _mock_get):
+        with patch('sys.stdout', new=StringIO()):
+            self.assertEqual(main(), 0)
+
+    @patch('sys.argv', ['config-volume', '--get-headphone'])
+    @patch('configurator.volume.get_headphone_volume', return_value=(None, None))
+    def test_main_get_headphone_failure(self, _mock_get):
+        with patch('sys.stderr', new=StringIO()):
+            self.assertEqual(main(), 1)
+
+    @patch('sys.argv', ['config-volume', '--set-headphone', '66'])
+    @patch('configurator.volume.set_headphone_volume', return_value=True)
+    def test_main_set_headphone_success(self, _mock_set):
+        with patch('sys.stdout', new=StringIO()):
+            self.assertEqual(main(), 0)
+
+    @patch('sys.argv', ['config-volume', '--set-headphone', '66'])
+    @patch('configurator.volume.set_headphone_volume', return_value=False)
+    def test_main_set_headphone_failure(self, _mock_set):
+        with patch('sys.stderr', new=StringIO()):
+            self.assertEqual(main(), 1)
+
+    @patch('sys.argv', ['config-volume', '--store-headphone'])
+    @patch('configurator.volume.store_headphone_volume', return_value=True)
+    def test_main_store_headphone_success(self, _mock_store):
+        with patch('sys.stdout', new=StringIO()):
+            self.assertEqual(main(), 0)
+
+    @patch('sys.argv', ['config-volume', '--store-headphone'])
+    @patch('configurator.volume.store_headphone_volume', return_value=False)
+    def test_main_store_headphone_failure(self, _mock_store):
+        with patch('sys.stderr', new=StringIO()):
+            self.assertEqual(main(), 1)
+
+    @patch('sys.argv', ['config-volume', '--restore-headphone'])
+    @patch('configurator.volume.restore_headphone_volume', return_value=True)
+    def test_main_restore_headphone_success(self, _mock_restore):
+        with patch('sys.stdout', new=StringIO()):
+            self.assertEqual(main(), 0)
+
+    @patch('sys.argv', ['config-volume', '--restore-headphone'])
+    @patch('configurator.volume.restore_headphone_volume', return_value=False)
+    def test_main_restore_headphone_failure(self, _mock_restore):
+        with patch('sys.stderr', new=StringIO()):
+            self.assertEqual(main(), 1)
+
+    @patch('sys.argv', ['config-volume', '--store'])
+    @patch('configurator.volume.store_volume', return_value=True)
+    def test_main_store_success(self, _mock_store):
+        self.assertEqual(main(), 0)
+
+    @patch('sys.argv', ['config-volume', '--store'])
+    @patch('configurator.volume.store_volume', return_value=False)
+    def test_main_store_failure(self, _mock_store):
+        self.assertEqual(main(), 1)
+
+    @patch('sys.argv', ['config-volume', '--restore'])
+    @patch('configurator.volume.restore_volume', return_value=True)
+    def test_main_restore_success(self, _mock_restore):
+        self.assertEqual(main(), 0)
+
+    @patch('sys.argv', ['config-volume', '--restore'])
+    @patch('configurator.volume.restore_volume', return_value=False)
+    def test_main_restore_failure(self, _mock_restore):
+        self.assertEqual(main(), 1)
+
+    @patch('sys.argv', ['config-volume', '--store', '--verbose'])
+    @patch('configurator.volume.store_volume', return_value=True)
+    @patch('configurator.volume.logging.getLogger')
+    def test_main_verbose_sets_debug_level(self, mock_get_logger, _mock_store):
+        logger = MagicMock()
+        mock_get_logger.return_value = logger
+        self.assertEqual(main(), 0)
+        logger.setLevel.assert_called_once()
+
+
+class TestVolumeRemainingBranchCoverage(unittest.TestCase):
+    """Additional targeted tests for remaining uncovered branches."""
+
+    @patch('configurator.volume.get_cached_control_name', return_value='PCM')
+    @patch('configurator.volume.store_headphone_volume', return_value=True)
+    @patch('configurator.volume.is_pipewire_available', return_value=True)
+    @patch('configurator.volume.get_pipewire_volume', side_effect=[None, None])
+    @patch('configurator.volume.get_current_volume', return_value=None)
+    @patch('configurator.volume.get_cached_card_index', return_value=0)
+    def test_store_volume_handles_missing_physical_and_pipewire_volumes(
+        self,
+        _mock_card,
+        _mock_get_vol,
+        _mock_pipewire_get,
+        _mock_pipewire_available,
+        _mock_store_hp,
+        _mock_control,
+    ):
+        self.assertFalse(store_volume())
+
+    @patch('configurator.volume.get_cached_card_index', side_effect=Exception('boom'))
+    def test_store_volume_top_level_exception(self, _mock_card):
+        self.assertFalse(store_volume())
+
+    @patch('configurator.volume.restore_headphone_volume', return_value=True)
+    @patch('configurator.volume.is_pipewire_available', return_value=True)
+    @patch('configurator.volume.get_cached_control_name', return_value='PCM')
+    @patch('configurator.volume.set_volume', return_value=True)
+    @patch('configurator.volume.get_cached_card_index', return_value=1)
+    @patch('configurator.volume.ConfigDB')
+    def test_restore_volume_handles_missing_db_and_pipewire_values(
+        self,
+        mock_db_class,
+        _mock_card,
+        _mock_set_vol,
+        _mock_control,
+        _mock_pipewire,
+        _mock_restore_hp,
+    ):
+        mock_db = MagicMock()
+        mock_db_class.return_value = mock_db
+        mock_db.get.side_effect = lambda key: {
+            'system.volume': None,
+            'system.volume.card': None,
+            'system.volume.control': None,
+            'system.volume.pipewire.master': None,
+            'system.volume.pipewire.capture': None,
+        }.get(key)
+
+        self.assertFalse(restore_volume())
+
+    @patch('configurator.volume.ConfigDB', side_effect=Exception('db exploded'))
+    def test_restore_volume_top_level_exception(self, _mock_db):
+        self.assertFalse(restore_volume())
+
+    @patch('configurator.volume.alsa_available', False)
+    @patch('configurator.volume.subprocess.check_output', return_value='unparseable output')
+    def test_get_pipewire_volume_no_percentage_match(self, _mock_subprocess):
+        self.assertIsNone(get_pipewire_volume('Master'))
+
+    @patch('configurator.volume.alsa_available', False)
+    def test_set_pipewire_volume_invalid_value_subprocess(self):
+        self.assertFalse(set_pipewire_volume('Master', 'not-a-number'))
+
+    @patch('configurator.volume.get_cached_card_index', return_value=None)
+    def test_get_available_headphone_controls_no_card(self, _mock_card):
+        self.assertEqual(get_available_headphone_controls(), [])
+
+    @patch('configurator.volume.ConfigDB')
+    @patch('configurator.volume.get_cached_card_index', return_value=1)
+    @patch('configurator.volume.get_available_headphone_controls', return_value=['Headphone'])
+    @patch('configurator.volume.set_volume', return_value=True)
+    def test_restore_headphone_volume_warns_on_configuration_change(
+        self,
+        _mock_set,
+        _mock_controls,
+        _mock_card,
+        mock_db_class,
+    ):
+        mock_db = MagicMock()
+        mock_db_class.return_value = mock_db
+        mock_db.get.side_effect = lambda key: {
+            'system.volume.headphone': '75',
+            'system.volume.headphone.card': '0',
+            'system.volume.headphone.control': 'Speaker',
+        }.get(key)
+        self.assertTrue(restore_headphone_volume())
+
+    @patch('configurator.volume.get_cached_card_index', side_effect=Exception('hp get fail'))
+    def test_get_headphone_volume_exception_path(self, _mock_card):
+        self.assertEqual(get_headphone_volume(), (None, None))
+
+    @patch('configurator.volume.get_cached_card_index', side_effect=Exception('hp set fail'))
+    def test_set_headphone_volume_exception_path(self, _mock_card):
+        self.assertFalse(set_headphone_volume('50'))
+
+    @patch('configurator.volume.get_cached_card_index', side_effect=Exception('hp store fail'))
+    def test_store_headphone_volume_exception_path(self, _mock_card):
+        self.assertFalse(store_headphone_volume())
+
+    @patch('configurator.volume.ConfigDB', side_effect=Exception('hp restore fail'))
+    def test_restore_headphone_volume_exception_path(self, _mock_db):
+        self.assertFalse(restore_headphone_volume())
+
+    @patch('sys.argv', ['config-volume', '--list-headphone'])
+    @patch('configurator.volume.get_available_headphone_controls', return_value=['Headphone'])
+    def test_main_list_headphone_success(self, _mock_controls):
+        with patch('sys.stdout', new=StringIO()):
+            self.assertEqual(main(), 0)
+
+
 if __name__ == '__main__':
     unittest.main()

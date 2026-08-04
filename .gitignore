@@ -9,6 +9,8 @@ dist/*
 .vscode/settings.json
 .venv/
 .pytest_cache/
+.coverage
+htmlcov/
 
 # Debian build artifacts
 debian/.debhelper/

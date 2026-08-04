@@ -16,13 +16,15 @@ import tempfile
 import os
 import sys
 import shutil
-from unittest.mock import patch
+import sqlite3
+from unittest.mock import patch, MagicMock
 from typing import Any, Dict, Tuple, cast
 
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from configurator.configdb import ConfigDB
+import configurator.configdb as configdb_module
 from cryptography.fernet import InvalidToken
 
 
@@ -455,30 +457,30 @@ class TestFlaskHandlers(unittest.TestCase):
 
                 self.assertIn('Flask', str(context.exception))
 
-    @patch('configurator.configdb.jsonify')
-    @patch('configurator.configdb.request')
-    def test_handle_get_config_keys(self, mock_request, mock_jsonify):
+    def test_handle_get_config_keys(self):
         """Test handle_get_config_keys Flask handler"""
-        mock_request.args.get.return_value = None
-        mock_jsonify.side_effect = lambda payload: payload
+        mock_request = type("Req", (), {"args": type("Args", (), {"get": staticmethod(lambda _k: None)})()})()
 
-        result = self.db.handle_get_config_keys()
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            result = self.db.handle_get_config_keys()
+
         payload, status = unwrap_response(result)
-
-        mock_request.args.get.assert_called_once_with('prefix')
         self.assertEqual(status, 200)
         self.assertEqual(payload['status'], 'success')
         self.assertEqual(payload['count'], 1)
         self.assertEqual(payload['data'], ['test_key'])
 
-    @patch('configurator.configdb.jsonify')
-    @patch('configurator.configdb.request')
-    def test_handle_get_config_value(self, mock_request, mock_jsonify):
+    def test_handle_get_config_value(self):
         """Test handle_get_config_value Flask handler"""
-        mock_request.args.get.side_effect = lambda key, default=None: 'false' if key == 'secure' else None
-        mock_jsonify.side_effect = lambda payload: payload
+        mock_request = type(
+            "Req",
+            (),
+            {"args": type("Args", (), {"get": staticmethod(lambda key, default=None: 'false' if key == 'secure' else None)})()},
+        )()
 
-        result = self.db.handle_get_config_value('test_key')
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            result = self.db.handle_get_config_value('test_key')
+
         payload, status = unwrap_response(result)
 
         self.assertEqual(status, 200)
@@ -486,16 +488,16 @@ class TestFlaskHandlers(unittest.TestCase):
         self.assertEqual(payload['data']['key'], 'test_key')
         self.assertEqual(payload['data']['value'], 'test_value')
 
-    @patch('configurator.configdb.jsonify')
-    @patch('configurator.configdb.request')
-    def test_handle_set_config_value(self, mock_request, mock_jsonify):
+    def test_handle_set_config_value(self):
         """Test handle_set_config_value Flask handler"""
+        mock_request = MagicMock()
         mock_request.is_json = True
         mock_request.get_data.return_value = '{"value": "new_value", "secure": false}'
         mock_request.get_json.return_value = {'value': 'new_value', 'secure': False}
-        mock_jsonify.side_effect = lambda payload: payload
 
-        result = self.db.handle_set_config_value('new_key')
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            result = self.db.handle_set_config_value('new_key')
+
         payload, status = unwrap_response(result)
 
         self.assertEqual(status, 200)
@@ -504,88 +506,86 @@ class TestFlaskHandlers(unittest.TestCase):
         self.assertEqual(payload['data']['value'], 'new_value')
         self.assertEqual(self.db.get('new_key'), 'new_value')
 
-    @patch('configurator.configdb.jsonify')
-    @patch('configurator.configdb.request')
-    def test_handle_set_config_value_secure_string_false_not_encrypted(self, mock_request, mock_jsonify):
+    def test_handle_set_config_value_secure_string_false_not_encrypted(self):
         """String value 'false' for secure should be parsed as False."""
+        mock_request = MagicMock()
         mock_request.is_json = True
         mock_request.get_data.return_value = '{"value": "plain", "secure": "false"}'
         mock_request.get_json.return_value = {'value': 'plain', 'secure': 'false'}
-        mock_jsonify.side_effect = lambda payload: payload
 
-        result = self.db.handle_set_config_value('plain_key')
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            result = self.db.handle_set_config_value('plain_key')
+
         payload, status = unwrap_response(result)
 
         self.assertEqual(status, 200)
         self.assertEqual(payload['status'], 'success')
         self.assertEqual(self.db.get('plain_key', secure=False), 'plain')
 
-    @patch('configurator.configdb.jsonify')
-    @patch('configurator.configdb.request')
-    def test_handle_set_config_value_invalid_secure_returns_400(self, mock_request, mock_jsonify):
+    def test_handle_set_config_value_invalid_secure_returns_400(self):
         """Invalid secure field values should be rejected with 400."""
+        mock_request = MagicMock()
         mock_request.is_json = True
         mock_request.get_data.return_value = '{"value": "v", "secure": "not-bool"}'
         mock_request.get_json.return_value = {'value': 'v', 'secure': 'not-bool'}
-        mock_jsonify.side_effect = lambda payload: payload
 
-        result = self.db.handle_set_config_value('key')
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            result = self.db.handle_set_config_value('key')
+
         payload, status = unwrap_response(result)
 
         self.assertEqual(status, 400)
         self.assertEqual(payload['status'], 'error')
         self.assertEqual(payload['message'], 'Field "secure" must be a boolean')
 
-    @patch('configurator.configdb.jsonify')
-    @patch('configurator.configdb.request')
-    def test_handle_set_config_value_empty_json_returns_400(self, mock_request, mock_jsonify):
+    def test_handle_set_config_value_empty_json_returns_400(self):
         """Test set handler returns 400 with specific message for empty JSON body."""
+        mock_request = MagicMock()
         mock_request.is_json = True
         mock_request.get_data.return_value = ''
-        mock_jsonify.side_effect = lambda payload: payload
 
-        result = self.db.handle_set_config_value('new_key')
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            result = self.db.handle_set_config_value('new_key')
 
         self.assertEqual(result[1], 400)
         self.assertEqual(result[0]['status'], 'error')
         self.assertEqual(result[0]['message'], 'JSON body cannot be empty')
 
-    @patch('configurator.configdb.jsonify')
-    @patch('configurator.configdb.request')
-    def test_handle_set_config_value_malformed_json_returns_400(self, mock_request, mock_jsonify):
+    def test_handle_set_config_value_malformed_json_returns_400(self):
         """Test set handler returns 400 with specific message for malformed JSON body."""
+        mock_request = MagicMock()
         mock_request.is_json = True
         mock_request.get_data.return_value = '{invalid json'
         mock_request.get_json.return_value = None
-        mock_jsonify.side_effect = lambda payload: payload
 
-        result = self.db.handle_set_config_value('new_key')
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            result = self.db.handle_set_config_value('new_key')
 
         self.assertEqual(result[1], 400)
         self.assertEqual(result[0]['status'], 'error')
         self.assertEqual(result[0]['message'], 'Malformed JSON body')
 
-    @patch('configurator.configdb.jsonify')
-    @patch('configurator.configdb.request')
-    def test_handle_delete_config_value(self, mock_request, mock_jsonify):
+    def test_handle_delete_config_value(self):
         """Test handle_delete_config_value Flask handler"""
-        mock_jsonify.side_effect = lambda payload: payload
+        with patch.dict(configdb_module.__dict__, {'request': MagicMock(), 'jsonify': lambda payload: payload}):
+            result = self.db.handle_delete_config_value('test_key')
 
-        result = self.db.handle_delete_config_value('test_key')
         payload, status = unwrap_response(result)
 
         self.assertEqual(status, 200)
         self.assertEqual(payload['status'], 'success')
         self.assertIsNone(self.db.get('test_key'))
 
-    @patch('configurator.configdb.jsonify')
-    @patch('configurator.configdb.request')
-    def test_handle_get_config_value_decrypt_failure_returns_500(self, mock_request, mock_jsonify):
+    def test_handle_get_config_value_decrypt_failure_returns_500(self):
         """Decryption errors should surface as server errors, not 404."""
-        mock_request.args.get.side_effect = lambda key, default=None: 'true' if key == 'secure' else None
-        mock_jsonify.side_effect = lambda payload: payload
+        mock_request = type(
+            "Req",
+            (),
+            {"args": type("Args", (), {"get": staticmethod(lambda key, default=None: 'true' if key == 'secure' else None)})()},
+        )()
 
-        with patch.object(self.db, 'get', side_effect=InvalidToken('bad token')):
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}), \
+            patch.object(self.db, 'get', side_effect=InvalidToken('bad token')):
             result = self.db.handle_get_config_value('test_key')
 
         payload, status = unwrap_response(result)
@@ -612,6 +612,283 @@ class TestCLIBehavior(unittest.TestCase):
 
         with self.assertRaises(SystemExit):
             main()
+
+
+class TestConfigDBBranchCoverage(unittest.TestCase):
+    """Focused branch tests for uncovered ConfigDB code paths."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.temp_dir, 'branch.db')
+        self.db = ConfigDB(self.db_path)
+
+    def tearDown(self):
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_parse_bool_variants_and_errors(self):
+        parse_bool = getattr(configdb_module, '_parse_bool')
+        self.assertTrue(parse_bool(True))
+        self.assertFalse(parse_bool(False))
+        self.assertTrue(parse_bool(1))
+        self.assertFalse(parse_bool(0))
+        self.assertTrue(parse_bool(' yes '))
+        self.assertFalse(parse_bool('off'))
+        with self.assertRaises(ValueError):
+            parse_bool(2)
+        with self.assertRaises(ValueError):
+            parse_bool('maybe')
+        with self.assertRaises(ValueError):
+            parse_bool(object())
+
+    def test_ensure_db_exists_handles_makedirs_failure(self):
+        failing_path = os.path.join(self.temp_dir, 'missing', 'db.sqlite')
+        instance = ConfigDB.__new__(ConfigDB)
+        instance.db_path = failing_path
+        with patch('configurator.configdb.os.path.exists', return_value=False), \
+            patch('configurator.configdb.os.makedirs', side_effect=OSError('no permission')):
+            self.assertFalse(instance._ensure_db_exists())
+
+    def test_ensure_db_exists_handles_sqlite_failure(self):
+        instance = ConfigDB.__new__(ConfigDB)
+        instance.db_path = self.db_path
+        with patch('configurator.configdb.sqlite3.connect', side_effect=sqlite3.Error('db down')):
+            self.assertFalse(instance._ensure_db_exists())
+
+    def test_get_handles_sqlite_error(self):
+        with patch('configurator.configdb.sqlite3.connect', side_effect=sqlite3.Error('read failed')):
+            self.assertEqual(self.db.get('k', default='fallback'), 'fallback')
+
+    def test_set_handles_exception(self):
+        with patch.object(self.db, 'get', side_effect=Exception('boom')):
+            self.assertFalse(self.db.set('k', 'v'))
+
+    def test_delete_handles_exception(self):
+        with patch('configurator.configdb.sqlite3.connect', side_effect=sqlite3.Error('delete failed')):
+            self.assertFalse(self.db.delete('k'))
+
+    def test_list_keys_handles_exception(self):
+        with patch('configurator.configdb.sqlite3.connect', side_effect=sqlite3.Error('list failed')):
+            self.assertEqual(self.db.list_keys(), [])
+
+    def test_get_all_handles_exception(self):
+        with patch('configurator.configdb.sqlite3.connect', side_effect=sqlite3.Error('dump failed')):
+            self.assertEqual(self.db.get_all(), {})
+
+    def test_clear_all_handles_exception(self):
+        with patch('configurator.configdb.sqlite3.connect', side_effect=sqlite3.Error('clear failed')):
+            self.assertFalse(self.db.clear_all())
+
+    def test_handle_get_config_keys_exception_returns_500(self):
+        mock_request = type("Req", (), {"args": type("Args", (), {"get": staticmethod(lambda _k: None)})()})()
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}), \
+            patch.object(self.db, 'list_keys', side_effect=Exception('boom')):
+            payload, status = unwrap_response(self.db.handle_get_config_keys())
+        self.assertEqual(status, 500)
+        self.assertEqual(payload['status'], 'error')
+
+    def test_handle_get_config_value_not_found_returns_404(self):
+        mock_request = type(
+            "Req",
+            (),
+            {"args": type("Args", (), {"get": staticmethod(lambda key, default=None: 'false' if key == 'secure' else None)})()},
+        )()
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            payload, status = unwrap_response(self.db.handle_get_config_value('missing'))
+        self.assertEqual(status, 404)
+        self.assertEqual(payload['status'], 'error')
+
+    def test_handle_get_config_value_invalid_secure_returns_500(self):
+        mock_request = type(
+            "Req",
+            (),
+            {"args": type("Args", (), {"get": staticmethod(lambda key, default=None: 'not-bool' if key == 'secure' else None)})()},
+        )()
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            payload, status = unwrap_response(self.db.handle_get_config_value('any'))
+        self.assertEqual(status, 500)
+        self.assertEqual(payload['status'], 'error')
+
+    def test_handle_set_config_value_non_json_returns_400(self):
+        mock_request = MagicMock(is_json=False)
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            payload, status = unwrap_response(self.db.handle_set_config_value('k'))
+        self.assertEqual(status, 400)
+        self.assertEqual(payload['message'], 'Content-Type must be application/json')
+
+    def test_handle_set_config_value_non_object_json_returns_400(self):
+        mock_request = MagicMock()
+        mock_request.is_json = True
+        mock_request.get_data.return_value = '[1,2]'
+        mock_request.get_json.return_value = [1, 2]
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            payload, status = unwrap_response(self.db.handle_set_config_value('k'))
+        self.assertEqual(status, 400)
+        self.assertEqual(payload['message'], 'JSON body must be an object')
+
+    def test_handle_set_config_value_missing_value_returns_400(self):
+        mock_request = MagicMock()
+        mock_request.is_json = True
+        mock_request.get_data.return_value = '{"secure": true}'
+        mock_request.get_json.return_value = {'secure': True}
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            payload, status = unwrap_response(self.db.handle_set_config_value('k'))
+        self.assertEqual(status, 400)
+        self.assertEqual(payload['message'], 'Missing required field: value')
+
+    def test_handle_set_config_value_set_failure_returns_500(self):
+        mock_request = MagicMock()
+        mock_request.is_json = True
+        mock_request.get_data.return_value = '{"value": "x"}'
+        mock_request.get_json.return_value = {'value': 'x'}
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}), \
+            patch.object(self.db, 'set', return_value=False):
+            payload, status = unwrap_response(self.db.handle_set_config_value('k'))
+        self.assertEqual(status, 500)
+        self.assertEqual(payload['message'], 'Failed to set configuration value')
+
+    def test_handle_set_config_value_exception_returns_500(self):
+        mock_request = MagicMock()
+        mock_request.is_json = True
+        mock_request.get_data.return_value = '{"value": "x"}'
+        mock_request.get_json.side_effect = Exception('json parser failed')
+        with patch.dict(configdb_module.__dict__, {'request': mock_request, 'jsonify': lambda payload: payload}):
+            payload, status = unwrap_response(self.db.handle_set_config_value('k'))
+        self.assertEqual(status, 500)
+        self.assertEqual(payload['message'], 'Failed to set configuration value')
+
+    def test_handle_delete_config_value_failure_and_exception(self):
+        with patch.dict(configdb_module.__dict__, {'request': MagicMock(), 'jsonify': lambda payload: payload}), \
+            patch.object(self.db, 'delete', return_value=False):
+            payload, status = unwrap_response(self.db.handle_delete_config_value('k'))
+        self.assertEqual(status, 500)
+        self.assertEqual(payload['message'], 'Failed to delete configuration value')
+
+        with patch.dict(configdb_module.__dict__, {'request': MagicMock(), 'jsonify': lambda payload: payload}), \
+            patch.object(self.db, 'delete', side_effect=Exception('db unavailable')):
+            payload, status = unwrap_response(self.db.handle_delete_config_value('k'))
+        self.assertEqual(status, 500)
+        self.assertEqual(payload['message'], 'Failed to delete configuration value')
+
+
+class TestConfigDBMainCommands(unittest.TestCase):
+    """CLI branch coverage for both new-style and legacy command syntax."""
+
+    def _make_db(self):
+        db = MagicMock()
+        db.get.return_value = 'value'
+        db.set.return_value = True
+        db.delete.return_value = True
+        db.list_keys.return_value = ['a', 'b']
+        db.get_all.return_value = {'k': 'v'}
+        return db
+
+    @patch('builtins.print')
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', '--get', 'key'])
+    def test_main_new_get_success(self, mock_db_cls, mock_print):
+        db = self._make_db()
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 0)
+        db.get.assert_called_once_with('key', None)
+        mock_print.assert_called_once_with('value')
+
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', '--set', 'k', 'v'])
+    def test_main_new_set_failure(self, mock_db_cls):
+        db = self._make_db()
+        db.set.return_value = False
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 1)
+
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', '--delete', 'k'])
+    def test_main_new_delete_failure(self, mock_db_cls):
+        db = self._make_db()
+        db.delete.return_value = False
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 1)
+
+    @patch('builtins.print')
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', '--list', '--prefix', 'x:'])
+    def test_main_new_list(self, mock_db_cls, mock_print):
+        db = self._make_db()
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 0)
+        db.list_keys.assert_called_once_with('x:')
+        self.assertEqual(mock_print.call_count, 2)
+
+    @patch('builtins.print')
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', '--dump', '--prefix', 'x:'])
+    def test_main_new_dump(self, mock_db_cls, mock_print):
+        db = self._make_db()
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 0)
+        db.get_all.assert_called_once_with('x:')
+        mock_print.assert_called_once_with('k=v')
+
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', 'get', 'k'])
+    def test_main_legacy_get_missing_returns_1(self, mock_db_cls):
+        db = self._make_db()
+        db.get.return_value = None
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 1)
+
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', 'set', 'k', 'v'])
+    def test_main_legacy_set_failure(self, mock_db_cls):
+        db = self._make_db()
+        db.set.return_value = False
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 1)
+
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', 'delete', 'k'])
+    def test_main_legacy_delete_failure(self, mock_db_cls):
+        db = self._make_db()
+        db.delete.return_value = False
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 1)
+
+    @patch('builtins.print')
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', 'list', 'pref:'])
+    def test_main_legacy_list_with_prefix(self, mock_db_cls, mock_print):
+        db = self._make_db()
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 0)
+        db.list_keys.assert_called_once_with('pref:')
+        self.assertEqual(mock_print.call_count, 2)
+
+    @patch('builtins.print')
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', 'dump', 'pref:'])
+    def test_main_legacy_dump_with_prefix(self, mock_db_cls, mock_print):
+        db = self._make_db()
+        mock_db_cls.return_value = db
+        self.assertEqual(configdb_module.main(), 0)
+        db.get_all.assert_called_once_with('pref:')
+        mock_print.assert_called_once_with('k=v')
+
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db', '--verbose', '--get', 'key'])
+    def test_main_verbose_sets_debug_level(self, mock_db_cls):
+        db = self._make_db()
+        mock_db_cls.return_value = db
+        with patch('configurator.configdb.logging.getLogger') as mock_get_logger:
+            self.assertEqual(configdb_module.main(), 0)
+            mock_get_logger.return_value.setLevel.assert_called_once()
+
+    @patch('configurator.configdb.ConfigDB')
+    @patch('sys.argv', ['config-db'])
+    def test_main_no_action_prints_help(self, mock_db_cls):
+        mock_db_cls.return_value = self._make_db()
+        with patch('argparse.ArgumentParser.print_help') as mock_help:
+            self.assertEqual(configdb_module.main(), 1)
+            mock_help.assert_called_once()
 
 
 class TestEdgeCasesAndRobustness(unittest.TestCase):

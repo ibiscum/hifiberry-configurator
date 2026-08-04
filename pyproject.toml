@@ -52,3 +52,11 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/configurator"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

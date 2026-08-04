@@ -18,7 +18,17 @@ import sys
 # Add src directory to path for imports
 # sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from configurator.avahi import configure_avahi_interfaces, check_root_privileges, setup_logging
+from configurator.avahi import (
+    ALLOW_INTERFACES_LINE,
+    _check_only_result,
+    _ensure_allow_interfaces,
+    _filter_server_interface_rules,
+    _restart_or_start_avahi,
+    check_root_privileges,
+    configure_avahi_interfaces,
+    main,
+    setup_logging,
+)
 
 
 class TestConfigureAvahiInterfaces:
@@ -199,3 +209,168 @@ class TestSetupLogging:
         mock_logging.assert_called_once()
         call_kwargs = mock_logging.call_args[1]
         assert call_kwargs['level'] == 10  # logging.DEBUG
+
+
+class TestAvahiHelperFunctions:
+    """Targeted branch tests for avahi helper functions."""
+
+    def test_filter_removes_commented_allow_and_deny_in_server_section(self):
+        """Commented allow/deny rules should be removed only within [server]."""
+        lines = [
+            "[server]\n",
+            "#allow-interfaces=eth1\n",
+            "#deny-interfaces=docker0\n",
+            "[reflector]\n",
+            "#allow-interfaces=lo\n",
+        ]
+
+        new_lines, modified, found_allow, in_server = _filter_server_interface_rules(lines)
+
+        assert modified is True
+        assert found_allow is True
+        assert in_server is False
+        assert "#allow-interfaces=eth1\n" not in new_lines
+        assert "#deny-interfaces=docker0\n" not in new_lines
+        assert "#allow-interfaces=lo\n" in new_lines
+
+    def test_filter_reports_server_section_open_at_eof(self):
+        """When file ends inside [server], helper should report in_server_section=True."""
+        lines = ["[server]\n", "host-name=test\n"]
+
+        _, modified, found_allow, in_server = _filter_server_interface_rules(lines)
+
+        assert modified is False
+        assert found_allow is False
+        assert in_server is True
+
+    def test_ensure_inserts_before_next_section(self):
+        """Allow rule should be inserted when leaving [server] for another section."""
+        lines = ["[server]\n", "use-ipv4=yes\n", "[publish]\n", "publish-hinfo=yes\n"]
+
+        final_lines, modified = _ensure_allow_interfaces(lines)
+
+        assert modified is True
+        assert final_lines == [
+            "[server]\n",
+            "use-ipv4=yes\n",
+            ALLOW_INTERFACES_LINE,
+            "[publish]\n",
+            "publish-hinfo=yes\n",
+        ]
+
+    def test_ensure_inserts_when_server_is_last_section(self):
+        """Allow rule should be appended when [server] is the last section in file."""
+        lines = ["[server]\n", "use-ipv4=yes\n"]
+
+        final_lines, modified = _ensure_allow_interfaces(lines)
+
+        assert modified is True
+        assert final_lines[-1] == ALLOW_INTERFACES_LINE
+
+    @patch('configurator.avahi.subprocess.run')
+    def test_restart_or_start_start_failure_still_returns_true(self, mock_run):
+        """Start failure should still return True after config was updated."""
+        active_result = MagicMock(returncode=1, stderr="")
+        start_result = MagicMock(returncode=1, stderr="failed start")
+        mock_run.side_effect = [active_result, start_result]
+
+        assert _restart_or_start_avahi() is True
+
+    @patch('configurator.avahi.subprocess.run', side_effect=OSError("systemctl missing"))
+    def test_restart_or_start_subprocess_exception_returns_true(self, _mock_run):
+        """Systemctl invocation errors should be tolerated after config write."""
+        assert _restart_or_start_avahi() is True
+
+
+class TestCheckOnlyAndMain:
+    """Coverage for check-only and CLI dispatch paths."""
+
+    @patch('configurator.avahi.os.path.exists', return_value=False)
+    @patch('builtins.print')
+    def test_check_only_not_installed(self, mock_print, _mock_exists):
+        """check-only should return success when Avahi config is absent."""
+        assert _check_only_result() == 0
+        mock_print.assert_called_once_with("Avahi daemon not installed")
+
+    @patch('configurator.avahi.os.path.exists', return_value=True)
+    @patch('builtins.open', new_callable=mock_open, read_data='[server]\nallow-interfaces=eth0,wlan0\n')
+    @patch('builtins.print')
+    def test_check_only_already_correct(self, mock_print, _mock_file, _mock_exists):
+        """check-only should report configured state when allow rule is present."""
+        assert _check_only_result() == 0
+        mock_print.assert_called_once_with(
+            "Avahi configuration is correct - only advertising on physical interfaces"
+        )
+
+    @patch('configurator.avahi.os.path.exists', return_value=True)
+    @patch('builtins.open', new_callable=mock_open, read_data='[server]\nuse-ipv4=yes\n')
+    @patch('builtins.print')
+    def test_check_only_needs_update(self, mock_print, _mock_file, _mock_exists):
+        """check-only should return 1 when allow rule is missing."""
+        assert _check_only_result() == 1
+        mock_print.assert_called_once_with("Avahi configuration needs updating")
+
+    @patch('configurator.avahi.os.path.exists', return_value=True)
+    @patch('builtins.open', side_effect=OSError("read failed"))
+    def test_check_only_read_error(self, _mock_file, _mock_exists):
+        """check-only should return 1 on file read error."""
+        assert _check_only_result() == 1
+
+    @patch('configurator.avahi.setup_logging')
+    @patch('configurator.avahi._check_only_result', return_value=0)
+    def test_main_check_only_path(self, mock_check_only, mock_setup_logging):
+        """main should dispatch to check-only without root check."""
+        with patch('sys.argv', ['config-avahi', '--check-only']):
+            result = main()
+
+        assert result == 0
+        mock_setup_logging.assert_called_once_with(False)
+        mock_check_only.assert_called_once()
+
+    @patch('configurator.avahi.setup_logging')
+    @patch('configurator.avahi.check_root_privileges', return_value=False)
+    def test_main_non_root_returns_error(self, mock_check_root, mock_setup_logging):
+        """main should fail in apply mode when not running as root."""
+        with patch('sys.argv', ['config-avahi']):
+            result = main()
+
+        assert result == 1
+        mock_setup_logging.assert_called_once_with(False)
+        mock_check_root.assert_called_once()
+
+    @patch('configurator.avahi.setup_logging')
+    @patch('configurator.avahi.check_root_privileges', return_value=True)
+    @patch('configurator.avahi.configure_avahi_interfaces', return_value=False)
+    def test_main_apply_failure_returns_error(self, mock_configure, mock_check_root, mock_setup_logging):
+        """main should return 1 when configuration apply fails."""
+        with patch('sys.argv', ['config-avahi']):
+            result = main()
+
+        assert result == 1
+        mock_setup_logging.assert_called_once_with(False)
+        mock_check_root.assert_called_once()
+        mock_configure.assert_called_once()
+
+    @patch('configurator.avahi.setup_logging')
+    @patch('configurator.avahi.check_root_privileges', return_value=True)
+    @patch('configurator.avahi.configure_avahi_interfaces', return_value=True)
+    def test_main_apply_success_returns_zero(self, mock_configure, mock_check_root, mock_setup_logging):
+        """main should return 0 when apply mode succeeds."""
+        with patch('sys.argv', ['config-avahi']):
+            result = main()
+
+        assert result == 0
+        mock_setup_logging.assert_called_once_with(False)
+        mock_check_root.assert_called_once()
+        mock_configure.assert_called_once()
+
+    @patch('configurator.avahi.setup_logging')
+    @patch('configurator.avahi._check_only_result', return_value=0)
+    def test_main_passes_verbose_flag(self, mock_check_only, mock_setup_logging):
+        """Verbose CLI flag should be forwarded to logging setup."""
+        with patch('sys.argv', ['config-avahi', '--check-only', '-v']):
+            result = main()
+
+        assert result == 0
+        mock_setup_logging.assert_called_once_with(True)
+        mock_check_only.assert_called_once()

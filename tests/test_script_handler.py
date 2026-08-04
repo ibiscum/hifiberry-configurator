@@ -9,6 +9,7 @@ and error handling for script management endpoints.
 # pylint: disable=import-error,too-many-public-methods
 import json
 import os
+import subprocess
 import shutil
 import sys
 import tempfile
@@ -59,6 +60,7 @@ def setup_flask_mocks():
 setup_flask_mocks()
 
 from configurator.handlers.script_handler import ScriptHandler  # noqa: E402
+import configurator.handlers.script_handler as script_handler_module  # noqa: E402
 
 
 class TestScriptHandlerConfigLoading(unittest.TestCase):
@@ -554,6 +556,156 @@ class TestScriptHandlerEdgeCases(unittest.TestCase):
         self.assertEqual(scripts[0]["name"], "minimal")
         self.assertEqual(scripts[0]["description"], "")
         self.assertEqual(scripts[0]["args"], [])
+
+
+class TestScriptHandlerMissingBranchCoverage(unittest.TestCase):
+    """Targeted tests for previously uncovered branches."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.config_file = os.path.join(self.temp_dir, "config.json")
+        self.script_file = os.path.join(self.temp_dir, "ok.sh")
+        with open(self.script_file, 'w', encoding='utf-8') as f:
+            f.write("#!/bin/bash\necho ok\n")
+        os.chmod(self.script_file, 0o755)
+
+    def tearDown(self):
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def _write_config(self, cfg):
+        with open(self.config_file, 'w', encoding='utf-8') as f:
+            json.dump(cfg, f)
+
+    def test_flask_import_fallback_sets_none(self):
+        """Module import fallback should provide jsonify stub and unset request."""
+        real_import = __import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "flask":
+                raise ImportError("flask unavailable")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=fake_import):
+            reloaded = __import__(
+                "configurator.handlers.script_handler",
+                fromlist=["ScriptHandler"],
+            )
+            reloaded = __import__(reloaded.__name__, fromlist=["jsonify"])  # no-op explicit access
+
+        # reload through importlib so module-level except ImportError path is executed
+        import importlib
+        with patch("builtins.__import__", side_effect=fake_import):
+            reloaded = importlib.reload(script_handler_module)
+
+        self.assertTrue(callable(reloaded.jsonify))
+        self.assertIsNone(reloaded.request)
+        with self.assertRaises(RuntimeError):
+            reloaded.jsonify({"status": "success"})
+        importlib.reload(script_handler_module)
+
+    def test_handle_list_scripts_exception_branch(self):
+        """Invalid script config items should hit list exception handler."""
+        self._write_config({"scripts": {"bad": "not-a-dict"}})
+        handler = ScriptHandler(config_file=self.config_file)
+
+        with patch("configurator.handlers.script_handler.jsonify", side_effect=lambda payload: MockResponse(payload, 200)):
+            response, status_code = unwrap_response(handler.handle_list_scripts())
+
+        self.assertEqual(status_code, 500)
+        self.assertEqual(response.json_data["error"], "list_scripts_failed")
+
+    def test_execute_script_non_positive_timeout_clamps_to_default(self):
+        """Timeout <= 0 should be clamped to default 300 seconds."""
+        self._write_config({"scripts": {"test": {"path": self.script_file}}})
+        handler = ScriptHandler(config_file=self.config_file)
+
+        mock_request = Mock()
+        mock_request.get_json.return_value = {"background": False, "timeout": -1}
+        with patch("configurator.handlers.script_handler.request", mock_request), \
+            patch.object(handler, "_execute_script_sync", return_value=MockResponse({"status": "success"}, 200)) as mock_sync:
+            handler.handle_execute_script("test")
+
+        self.assertEqual(mock_sync.call_args.args[3], 300)
+
+    def test_execute_script_outer_exception_branch(self):
+        """Unexpected errors during execute should return script_execution_failed payload."""
+        self._write_config({"scripts": {"test": {"path": self.script_file}}})
+        handler = ScriptHandler(config_file=self.config_file)
+
+        with patch("configurator.handlers.script_handler.os.path.exists", side_effect=RuntimeError("boom")), \
+            patch("configurator.handlers.script_handler.jsonify", side_effect=lambda payload: MockResponse(payload, 200)):
+            response, status_code = unwrap_response(handler.handle_execute_script("test"))
+
+        self.assertEqual(status_code, 500)
+        self.assertEqual(response.json_data["error"], "script_execution_failed")
+
+    def test_execute_script_sync_subprocess_error(self):
+        """SubprocessError should return structured subprocess_error payload."""
+        handler = ScriptHandler(config_file=self.config_file)
+        with patch("configurator.handlers.script_handler.subprocess.run", side_effect=subprocess.SubprocessError("subproc")), \
+            patch("configurator.handlers.script_handler.jsonify", side_effect=lambda payload: MockResponse(payload, 200)):
+            response, status_code = unwrap_response(
+                handler._execute_script_sync("id", "Name", [self.script_file], 10)
+            )
+
+        self.assertEqual(status_code, 500)
+        self.assertEqual(response.json_data["error"], "subprocess_error")
+
+    def test_execute_script_background_timeout_branch(self):
+        """Background thread timeout should be handled without crashing."""
+        handler = ScriptHandler(config_file=self.config_file)
+
+        class ImmediateThread:
+            def __init__(self, target=None, daemon=None):
+                self._target = target
+
+            def start(self):
+                if self._target:
+                    self._target()
+
+        with patch("configurator.handlers.script_handler.threading.Thread", ImmediateThread), \
+            patch("configurator.handlers.script_handler.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd=["x"], timeout=1)), \
+            patch("configurator.handlers.script_handler.jsonify", side_effect=lambda payload: MockResponse(payload, 200)):
+            response, status_code = unwrap_response(
+                handler._execute_script_background("id", "Name", [self.script_file])
+            )
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(response.json_data["status"], "success")
+
+    def test_execute_script_background_generic_exception_branch(self):
+        """Background thread generic exceptions should be handled without crashing."""
+        handler = ScriptHandler(config_file=self.config_file)
+
+        class ImmediateThread:
+            def __init__(self, target=None, daemon=None):
+                self._target = target
+
+            def start(self):
+                if self._target:
+                    self._target()
+
+        with patch("configurator.handlers.script_handler.threading.Thread", ImmediateThread), \
+            patch("configurator.handlers.script_handler.subprocess.run", side_effect=RuntimeError("bg fail")), \
+            patch("configurator.handlers.script_handler.jsonify", side_effect=lambda payload: MockResponse(payload, 200)):
+            response, status_code = unwrap_response(
+                handler._execute_script_background("id", "Name", [self.script_file])
+            )
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(response.json_data["status"], "success")
+
+    def test_get_script_info_exception_branch(self):
+        """Invalid script metadata should trigger script info error response."""
+        self._write_config({"scripts": {"bad": "not-a-dict"}})
+        handler = ScriptHandler(config_file=self.config_file)
+
+        with patch("configurator.handlers.script_handler.jsonify", side_effect=lambda payload: MockResponse(payload, 200)):
+            response, status_code = unwrap_response(handler.handle_get_script_info("bad"))
+
+        self.assertEqual(status_code, 500)
+        self.assertEqual(response.json_data["error"], "script_info_failed")
 
 
 if __name__ == "__main__":
